@@ -21,22 +21,22 @@ jobs:
         run: |
           pip3 install --break-system-packages theharvester dnstwist python-telegram-bot
 
-      - name: Clone metagoofil into ~/metagoofil
+      - name: Clone metagoofil into /home/runner/metagoofil
         run: |
-          git clone https://github.com/laramies/metagoofil.git ~/metagoofil
+          git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
 
-      - name: Clone sherlock into ~/sherlock and install its dependencies
+      - name: Clone sherlock and install it (no requirements.txt needed)
         run: |
-          git clone https://github.com/sherlock-project/sherlock.git ~/sherlock
-          cd ~/sherlock
-          pip3 install --break-system-packages -r requirements.txt
+          git clone https://github.com/sherlock-project/sherlock.git /home/runner/sherlock
+          cd /home/runner/sherlock
+          pip3 install --break-system-packages .
 
-      - name: Clone spiderfoot and create a wrapper command
+      - name: Clone spiderfoot and create wrapper command
         run: |
-          git clone https://github.com/smicallef/spiderfoot.git ~/spiderfoot
-          pip3 install --break-system-packages -r ~/spiderfoot/requirements.txt
-          # Create a globally available 'spiderfoot' command that runs sf.py
-          printf '#!/bin/bash\npython3 ~/spiderfoot/sf.py "$@"\n' | sudo tee /usr/local/bin/spiderfoot
+          git clone https://github.com/smicallef/spiderfoot.git /home/runner/spiderfoot
+          cd /home/runner/spiderfoot
+          pip3 install --break-system-packages .
+          sudo printf '#!/bin/bash\npython3 /home/runner/spiderfoot/sf.py "$@"\n' > /usr/local/bin/spiderfoot
           sudo chmod +x /usr/local/bin/spiderfoot
 
       - name: Run Phantom Watch
