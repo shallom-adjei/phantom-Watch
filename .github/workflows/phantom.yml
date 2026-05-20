@@ -25,19 +25,11 @@ jobs:
         run: |
           git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
 
-      - name: Clone sherlock and install it (no requirements.txt needed)
+      - name: Clone sherlock and install it
         run: |
           git clone https://github.com/sherlock-project/sherlock.git /home/runner/sherlock
           cd /home/runner/sherlock
           pip3 install --break-system-packages .
-
-      - name: Clone spiderfoot and create wrapper command
-        run: |
-          git clone https://github.com/smicallef/spiderfoot.git /home/runner/spiderfoot
-          cd /home/runner/spiderfoot
-          pip3 install --break-system-packages .
-          sudo printf '#!/bin/bash\npython3 /home/runner/spiderfoot/sf.py "$@"\n' > /usr/local/bin/spiderfoot
-          sudo chmod +x /usr/local/bin/spiderfoot
 
       - name: Run Phantom Watch
         env:
