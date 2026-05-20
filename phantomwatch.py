@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Phantom Watch – Interactive Reconnaissance Bot
-Features: button wizards, animated progress, plain‑text reports, hardened scans.
+Phantom Watch – Professional Reconnaissance Bot
+- Table‑style reports with exploitation & remediation
+- Detailed tool help
+- Concurrency safe (max 5 simultaneous scans)
 """
 
 import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio, signal
@@ -12,7 +14,6 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
-    ConversationHandler,
     filters,
     ContextTypes,
 )
@@ -24,6 +25,7 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_CHAT_ID = None
 DB_FILE = "phantom_clients.db"
 SCAN_TIMEOUT = 150  # per tool (seconds)
+MAX_CONCURRENT_SCANS = 5   # limit parallel scans
 # ===================================
 
 # Conversation states
@@ -37,7 +39,7 @@ SCAN_TIMEOUT = 150  # per tool (seconds)
     SET_EMAIL,
 ) = range(7)
 
-# Database setup
+# Database
 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS clients (
@@ -122,7 +124,6 @@ async def notify_admin(text: str, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------- Animated Progress Bar ----------
 async def send_animation(chat_id, context, stop_event):
-    """Send a moving progress bar every 10 seconds until stop_event is set."""
     frames = ["[▓░░░░░░░░] 10%", "[▓▓░░░░░░░] 20%", "[▓▓▓░░░░░░] 30%", "[▓▓▓▓░░░░░] 40%",
               "[▓▓▓▓▓░░░░] 50%", "[▓▓▓▓▓▓░░░] 60%", "[▓▓▓▓▓▓▓░░] 70%", "[▓▓▓▓▓▓▓▓░] 80%",
               "[▓▓▓▓▓▓▓▓▓] 90%", "[▓▓▓▓▓▓▓▓▓] 99%"]
@@ -143,7 +144,7 @@ async def send_animation(chat_id, context, stop_event):
     except:
         pass
 
-# ---------- Scan Engine (hardened) ----------
+# ---------- Scan Engine ----------
 def run_scan(domain: str, email: str = "", progress_callback=None, tools: list = None) -> dict:
     if tools is None:
         tools = ["nmap", "nikto", "whatweb", "theHarvester", "dnstwist", "metagoofil", "sherlock"]
@@ -196,85 +197,180 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
     conn.commit()
     return results
 
+# ==================== SMART REPORT FORMATTER ====================
 def format_report(domain: str, results: dict) -> str:
-    """Plain‑text, clean report with no Markdown."""
+    """Structured report: grouped by type, with exploitation and remediation."""
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    report = f"🔍 PHANTOM WATCH SECURITY REPORT\n{domain}\n{now}\n\n"
+    lines = [f"🔍 PHANTOM WATCH SECURITY REPORT", f"Domain: {domain}", f"Generated: {now}", ""]
 
+    # --- Technology Stack ---
     if 'whatweb' in results:
         clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
-        if 'HTTPServer' in clean:
-            server = re.findall(r'HTTPServer\[ (.*?) \]', clean)
-            if server: report += f"🖥 Web Server: {server[0]}\n"
-        if 'Cloudflare' in clean or 'cloudflare' in clean:
-            report += "🛡️ Cloudflare Detected — site behind CDN/WAF\n"
-        if '403' in clean:
-            report += "🔒 Site returns 403 Forbidden to scanners — good hardening.\n"
+        server = re.findall(r'HTTPServer\[ (.*?) \]', clean)
+        has_cloudflare = 'Cloudflare' in clean or 'cloudflare' in clean
+        has_403 = '403' in clean
         ips = re.findall(r'IP\[ ([^\]]+) \]', clean)
-        if ips: report += f"🌐 IPs Found: {', '.join(ips[:3])}\n"
-        report += "\n"
 
+        lines.append("🧩 TECHNOLOGY STACK")
+        if server: lines.append(f"   Web Server : {server[0]}")
+        if has_cloudflare: lines.append("   CDN/WAF    : Cloudflare (extra protection)")
+        if has_403: lines.append("   Scanner Access : 403 Forbidden (good hardening)")
+        if ips: lines.append(f"   IPs Found  : {', '.join(ips[:3])}")
+        if not (server or has_cloudflare or has_403 or ips):
+            lines.append("   No detailed technology info captured.")
+        lines.append("")
+
+    # --- Network & Port Exposure ---
     if 'nmap' in results:
         open_ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", results['nmap'], re.MULTILINE)
-        if open_ports:
-            report += "🛡️ Open Ports & Services\n"
-            for line in open_ports[:10]:
-                report += f"• {line}\n"
-            report += "\n"
         vulns = re.findall(r"\|.*VULNERABLE.*", results['nmap'])
-        if vulns:
-            report += "⚠️ Potential Vulnerabilities\n"
-            for v in vulns[:5]:
-                report += f"• {v.replace('|','').strip()}\n"
-            report += "\n"
 
+        lines.append("🛡️ NETWORK & PORT EXPOSURE")
+        if open_ports:
+            lines.append("   Open Ports :")
+            for port_line in open_ports[:10]:
+                lines.append(f"      • {port_line}")
+        if vulns:
+            lines.append("   Potential Vulnerabilities :")
+            for v in vulns[:5]:
+                clean_v = v.replace('|','').strip()
+                lines.append(f"      • {clean_v}")
+        if not open_ports and not vulns:
+            lines.append("   No open ports or known vulns detected.")
+
+        # Exploitation & Remediation for network findings
+        if open_ports or vulns:
+            lines.append("   🔓 Exploitation : Attackers can scan for open services, exploit outdated versions, or use brute‑force on exposed RDP/SSH/FTP.")
+            lines.append("   🛡️ Remediation : Close unnecessary ports, apply firewalls, patch services, use VPN for admin access.")
+        lines.append("")
+
+    # --- Web Application Issues ---
     if 'nikto' in results:
         findings = re.findall(r"\+ (.*)", results['nikto'])
+        lines.append("🔥 WEB APPLICATION ISSUES (Nikto)")
         if findings:
-            report += "🔥 Web Security Issues (Nikto)\n"
             for f in findings[:8]:
-                report += f"• {f}\n"
-            report += "\n"
+                lines.append(f"   • {f}")
+        else:
+            lines.append("   No specific issues found.")
+        if findings:
+            lines.append("   🔓 Exploitation : Outdated software, missing headers, or sensitive files can lead to injection, data leaks, or full compromise.")
+            lines.append("   🛡️ Remediation : Keep CMS/plugins updated, add security headers (CSP, X-Frame-Options), remove backup/test files.")
+        lines.append("")
 
+    # --- Email & OSINT Leaks ---
     if 'theHarvester' in results and results['theHarvester'] != "No email provided for OSINT.":
         harvest = results['theHarvester']
+        emails = []
         if "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-            if emails:
-                report += f"📧 Leaked Emails Found ({len(emails)}): {', '.join(emails[:5])}\n\n"
+        lines.append("📧 EMAIL & OSINT LEAKS (theHarvester)")
+        if emails:
+            lines.append(f"   Discovered Emails : {', '.join(emails[:5])}")
         else:
-            report += f"📡 OSINT Summary: {harvest[:300]}\n\n"
+            lines.append("   No emails harvested (set email for deeper scan).")
+        if emails:
+            lines.append("   🔓 Exploitation : Phishing, social engineering, credential stuffing using leaked emails.")
+            lines.append("   🛡️ Remediation : Enable email security (SPF/DKIM/DMARC), train staff to recognise phishing, use separate emails for public.")
+        lines.append("")
 
+    # --- Typosquatting / Domain Impersonation ---
     if 'dnstwist' in results:
         registered = re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE)
+        lines.append("🕵️ TYPOSQUATTING RISK (dnstwist)")
         if registered:
-            report += "🕵️ Similar Domains Registered (Typosquatting Risk)\n"
             for d in registered[:6]:
-                report += f"• {d}\n"
-            report += "\n"
+                lines.append(f"   • {d}")
+        else:
+            lines.append("   No suspicious similar domains registered.")
+        if registered:
+            lines.append("   🔓 Exploitation : Fake domains trick users into visiting phishing sites, stealing credentials.")
+            lines.append("   🛡️ Remediation : Monitor domain registrations, consider buying common misspellings, report to registrar.")
+        lines.append("")
 
+    # --- Document Metadata ---
     if 'metagoofil' in results and 'No dangerous' not in results['metagoofil']:
         meta = results['metagoofil']
-        report += "📄 Document Metadata Exposure\n"
+        lines.append("📄 DOCUMENT METADATA EXPOSURE (Metagoofil)")
         if 'usernames' in meta.lower() or 'path' in meta.lower():
-            report += "⚠️ Sensitive info (usernames/paths) found in public documents.\n"
+            lines.append("   ⚠️ Sensitive info (usernames/paths) found in public documents.")
         else:
-            report += f"{meta[:200]}\n"
-        report += "\n"
+            lines.append(f"   {meta[:200]}")
+        lines.append("   🔓 Exploitation : Metadata reveals internal paths, software versions, or usernames for targeted attacks.")
+        lines.append("   🛡️ Remediation : Strip metadata before publishing (use tools like ExifTool), avoid putting sensitive info in public docs.")
+        lines.append("")
     elif 'metagoofil' in results:
-        report += "📄 Document Metadata: No leaks detected.\n\n"
+        lines.append("📄 DOCUMENT METADATA: No leaks detected.\n")
 
+    # --- Social Media ---
     if 'sherlock' in results:
         found = re.findall(r"\[\+\] (.*)", results['sherlock'])
+        lines.append("👥 SOCIAL MEDIA PRESENCE (Sherlock)")
         if found:
-            report += "👥 Social Media Presence\n"
             for line in found[:10]:
-                report += f"• {line}\n"
-            report += "\n"
+                lines.append(f"   • {line}")
+        else:
+            lines.append("   No social media accounts found for the domain name.")
+        if found:
+            lines.append("   🔓 Exploitation : Social media profiles can be used for impersonation, social engineering, or password guessing.")
+            lines.append("   🛡️ Remediation : Review privacy settings, remove unused accounts, enable 2FA on all profiles.")
+        lines.append("")
 
-    report += "📌 Phantom Watch – Automated Security Reconnaissance\n"
-    report += "Interpretation by a professional recommended."
-    return report
+    lines.append("📌 Phantom Watch – Automated Security Reconnaissance")
+    lines.append("Interpretation by a professional recommended.")
+    return "\n".join(lines)
+
+# ==================== TOOL HELP TEXT ====================
+TOOL_HELP = {
+    "nmap": (
+        "⚡ Nmap (Network Mapper)\n"
+        "Scans for open ports, running services, OS detection, and known vulnerabilities.\n"
+        "Used by hackers to find entry points like outdated SSH, RDP, or vulnerable web servers.\n"
+        "Protection: Close unnecessary ports, use a firewall, keep services updated, and hide version banners."
+    ),
+    "nikto": (
+        "🕵️ Nikto\n"
+        "Scans web servers for dangerous files, misconfigurations, outdated software, and insecure headers.\n"
+        "Attackers exploit these to inject code, deface sites, or steal data.\n"
+        "Protection: Regularly update CMS/plugins, add security headers (CSP, X-Frame-Options), and remove default files."
+    ),
+    "whatweb": (
+        "🔎 WhatWeb\n"
+        "Identifies technologies used on a website (CMS, frameworks, analytics, CDN, etc.).\n"
+        "Hackers fingerprint the stack to launch targeted attacks against known vulnerabilities.\n"
+        "Protection: Mask technology signatures (e.g., modify headers), keep all components patched, and use a WAF."
+    ),
+    "theHarvester": (
+        "📧 theHarvester\n"
+        "Gathers emails, subdomains, IPs, and other OSINT from public sources.\n"
+        "Threat actors use this for phishing campaigns, credential stuffing, and social engineering.\n"
+        "Protection: Implement DMARC/SPF/DKIM, use generic contact forms, and train staff to recognise phishing."
+    ),
+    "dnstwist": (
+        "🔄 dnstwist\n"
+        "Detects typosquatting domains (e.g., googlle.com) that could be used to impersonate your brand.\n"
+        "Phishers register look‑alike domains to steal customer credentials.\n"
+        "Protection: Monitor domain registrations, purchase similar domains, and report fraudulent ones to the registrar."
+    ),
+    "metagoofil": (
+        "📄 Metagoofil\n"
+        "Extracts metadata from public documents (PDF, DOC, XLS) to find usernames, software versions, and paths.\n"
+        "This info helps attackers craft precise social engineering attacks or exploit internal software.\n"
+        "Protection: Strip metadata before publishing, avoid including internal paths or personal names in public files."
+    ),
+    "sherlock": (
+        "👤 Sherlock\n"
+        "Checks if a username is registered on various social media platforms.\n"
+        "Hackers use this to impersonate brands, gather intelligence, or launch targeted phishing via social channels.\n"
+        "Protection: Secure social accounts with 2FA, review privacy settings, and remove unused profiles."
+    ),
+}
+
+def get_full_help_text() -> str:
+    sections = []
+    for tool, desc in TOOL_HELP.items():
+        sections.append(desc)
+    return "\n\n".join(sections)
 
 # ==================== BUTTON MENUS ====================
 def main_menu_keyboard(user_is_admin=False):
@@ -359,13 +455,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "help":
-        help_text = (
-            "🔍 Full Scan – all 7 tools.\n"
-            "⚡ Quick Scan – select a specific pack.\n"
-            "📧 Set Email – enhances OSINT.\n"
-            "Use /start anytime to return."
-        )
-        await query.edit_message_text(help_text, reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        # Detailed help with tool explanations
+        help_text = get_full_help_text()
+        # Split if too long (Telegram limit 4096)
+        for i in range(0, len(help_text), 4000):
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=help_text[i:i+4000]
+            )
+        await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
     # Admin menus
@@ -378,7 +476,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "admin_adduser":
         if username != ADMIN_USERNAME: return
-        # Start add-user wizard
         await query.edit_message_text("Enter the Telegram username of the client (with @):")
         context.user_data['state'] = ADDUSER_USERNAME
         return
@@ -428,13 +525,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Invalid plan. Use free, monthly, or enterprise:")
             return
         context.user_data['add_plan'] = plan
-        if plan == "free":
-            # No months needed
-            await update.message.reply_text("How many months? (0 for default free trial):")
-            context.user_data['state'] = ADDUSER_MONTHS
-        else:
-            await update.message.reply_text("How many months?")
-            context.user_data['state'] = ADDUSER_MONTHS
+        await update.message.reply_text("How many months? (0 for default free trial):")
+        context.user_data['state'] = ADDUSER_MONTHS
         return
 
     if state == ADDUSER_MONTHS:
@@ -452,7 +544,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             set_plan(target, plan, months)
         await update.message.reply_text(f"✅ Added @{target} with {plan} plan for {months} months.",
                                         reply_markup=admin_menu_keyboard())
-        # Clear state
         for k in ('add_target', 'add_plan', 'state'):
             context.user_data.pop(k, None)
         return
@@ -526,49 +617,58 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # Start scan with animation
-        await update.message.reply_text("✅ Domain verified. Launching scan...")
-        chat_id = update.message.chat_id
+        # --- Concurrency control ---
+        sem = context.bot_data.setdefault("scan_semaphore", asyncio.Semaphore(MAX_CONCURRENT_SCANS))
+        if sem.locked():
+            await update.message.reply_text("⏳ Server is busy. Please wait a moment and try again.")
+            return
 
-        # Stop event for animation
-        stop_anim = asyncio.Event()
-        anim_task = asyncio.create_task(send_animation(chat_id, context, stop_anim))
-
-        # Progress callback (edit a single progress message)
-        progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
-        # Capture the event loop BEFORE entering the executor
-        loop = asyncio.get_running_loop()
-        def sync_progress(msg):
-            async def _upd():
-                try:
-                    await progress_msg.edit_text(msg)
-                except Exception:
-                    pass  # ignore if message was deleted
-            asyncio.run_coroutine_threadsafe(_upd(), loop)
-        # Get email
-        c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
-        row = c.fetchone()
-        email = row[0] if row else ""
-
-        # Determine tools
-        tools = context.user_data.get('tools', None)
-
-        loop = asyncio.get_running_loop()
+        await sem.acquire()
         try:
-            results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools)
-        except Exception as e:
-            await update.message.reply_text(f"❌ Scan crashed: {e}")
-        finally:
-            stop_anim.set()
-            await anim_task
-            try:
-                await progress_msg.delete()
-            except:
-                pass
+            # Start scan with animation
+            await update.message.reply_text("✅ Domain verified. Launching scan...")
+            chat_id = update.message.chat_id
 
-        # Generate and send report (plain text, no parse_mode)
-        report = format_report(domain, results)
-        # Telegram limit 4096, split if needed
+            stop_anim = asyncio.Event()
+            anim_task = asyncio.create_task(send_animation(chat_id, context, stop_anim))
+
+            # Progress callback (thread-safe)
+            progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
+            loop = asyncio.get_running_loop()
+            def sync_progress(msg):
+                async def _upd():
+                    try:
+                        await progress_msg.edit_text(msg)
+                    except:
+                        pass
+                asyncio.run_coroutine_threadsafe(_upd(), loop)
+
+            c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
+            row = c.fetchone()
+            email = row[0] if row else ""
+            tools = context.user_data.get('tools', None)
+
+            try:
+                results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools)
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                print(f"[!] Scan error: {tb}")
+                await notify_admin(f"❌ Scan crashed for {domain}: {e}\n{tb[:500]}", context)
+                await update.message.reply_text(f"❌ Scan encountered an error: {e}")
+                results = {}  # so we can still send a partial report
+            finally:
+                stop_anim.set()
+                await anim_task
+                try:
+                    await progress_msg.delete()
+                except:
+                    pass
+        finally:
+            sem.release()
+
+        # Build report
+        report = format_report(domain, results) if results else "❌ No results (scan failed)."
         max_len = 4000
         for i in range(0, len(report), max_len):
             await context.bot.send_message(chat_id=chat_id, text=report[i:i+max_len])
@@ -605,7 +705,6 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
-    # Message handler catches all text (for wizard states and domain input)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(error_handler)
 
