@@ -1,0 +1,41 @@
+name: Phantom Watch Bot
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # runs every 6 hours
+  workflow_dispatch:
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360     # 6 hours max per run
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nmap nikto whatweb theharvester dnstwist git python3-pip curl
+
+      - name: Install metagoofil
+        run: |
+          git clone https://github.com/laramies/metagoofil.git /tmp/metagoofil
+          cd /tmp/metagoofil && sudo cp -r * /usr/local/bin/metagoofil || true
+
+      - name: Install sherlock
+        run: |
+          git clone https://github.com/sherlock-project/sherlock.git /opt/sherlock
+          cd /opt/sherlock && pip3 install -r requirements.txt --break-system-packages
+
+      - name: Install spiderfoot
+        run: |
+          sudo apt-get install -y spiderfoot
+
+      - name: Install python-telegram-bot
+        run: pip3 install python-telegram-bot --break-system-packages
+
+      - name: Run Phantom Watch
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+        run: python3 phantomwatch.py
