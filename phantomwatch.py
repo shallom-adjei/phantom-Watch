@@ -16,17 +16,16 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import telegram.error
 import asyncio
-import os
 
 # ========== CONFIGURATION ==========
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
-ADMIN_CHAT_ID = None                                            # Set automatically after /start
+BOT_TOKEN = os.getenv("BOT_TOKEN")           # Set via GitHub Secrets
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME") # Set via GitHub Secrets
+ADMIN_CHAT_ID = None
 DB_FILE = "phantom_clients.db"
-SCAN_TIMEOUT = 180  # seconds max per tool
+SCAN_TIMEOUT = 180
 # ===================================
 
-# Database setup
+# Database tables
 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS clients (
@@ -51,6 +50,21 @@ def is_client(username: str) -> bool:
     c.execute("SELECT 1 FROM clients WHERE username=?", (username,))
     return c.fetchone() is not None
 
+def is_subscription_active(username: str) -> bool:
+    c.execute("SELECT plan, expiry FROM clients WHERE username=?", (username,))
+    row = c.fetchone()
+    if not row:
+        return False
+    plan, expiry = row
+    if plan == 'free':
+        if expiry and expiry < datetime.now().strftime("%Y-%m-%d"):
+            return False
+        return True
+    # Paid plans: check expiry if set
+    if expiry and expiry < datetime.now().strftime("%Y-%m-%d"):
+        return False
+    return True
+
 def add_client(username: str, plan: str = "free", expiry: str = ""):
     c.execute("INSERT OR REPLACE INTO clients VALUES (?,?,?,?)",
               (username, plan, expiry, ""))
@@ -60,6 +74,12 @@ def set_plan(username: str, plan: str, months: int):
     new_expiry = (datetime.now() + timedelta(days=30*months)).strftime("%Y-%m-%d")
     c.execute("UPDATE clients SET plan=?, expiry=? WHERE username=?",
               (plan, new_expiry, username))
+    conn.commit()
+
+def set_free_expiry(username: str):
+    """Set 7‑day expiry for free plan."""
+    new_expiry = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+    c.execute("UPDATE clients SET expiry=? WHERE username=?", (new_expiry, username))
     conn.commit()
 
 def generate_token() -> str:
@@ -74,7 +94,6 @@ def verify_domain(domain: str, token: str) -> bool:
         return False
 
 def run_command(cmd: str, timeout: int = SCAN_TIMEOUT) -> str:
-    """Run a shell command safely and return its output."""
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
         return result.stdout + result.stderr
@@ -84,7 +103,6 @@ def run_command(cmd: str, timeout: int = SCAN_TIMEOUT) -> str:
         return f"[!] Error: {str(e)}"
 
 async def notify_admin(text: str, context: ContextTypes.DEFAULT_TYPE):
-    """Send a message to the admin (you) if chat ID is known."""
     global ADMIN_CHAT_ID
     if ADMIN_CHAT_ID:
         try:
@@ -92,23 +110,28 @@ async def notify_admin(text: str, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"[!] Could not notify admin: {e}")
 
-# ------------------ Scan Engine ------------------
-def run_scan(domain: str, email: str = "") -> dict:
-    """Execute all tools and return a dictionary of results."""
+# ------------------ Scan Engine (with progress callback) ------------------
+def run_scan(domain: str, email: str = "", progress_callback=None) -> dict:
     results = {}
     print(f"[*] Starting scan for {domain}")
 
     # 1. nmap
     print("[*] Running Nmap...")
     results['nmap'] = run_command(f"nmap -sV -T4 --script vuln --top-ports 200 {domain}")
+    if progress_callback:
+        progress_callback("✅ Nmap finished. Checking web vulnerabilities (Nikto)...")
 
     # 2. nikto
     print("[*] Running Nikto...")
     results['nikto'] = run_command(f"nikto -h {domain} -T 123bde -maxtime 120s")
+    if progress_callback:
+        progress_callback("✅ Nikto done. Detecting technologies (WhatWeb)...")
 
     # 3. whatweb
     print("[*] Running WhatWeb...")
     results['whatweb'] = run_command(f"whatweb {domain}")
+    if progress_callback:
+        progress_callback("✅ WhatWeb completed. Gathering OSINT emails...")
 
     # 4. theHarvester
     if email:
@@ -122,15 +145,19 @@ def run_scan(domain: str, email: str = "") -> dict:
             results['theHarvester'] = "No email results."
     else:
         results['theHarvester'] = "No email provided for OSINT."
+    if progress_callback:
+        progress_callback("✅ OSINT emails gathered. Looking for typosquatting domains...")
 
     # 5. dnstwist
     print("[*] Running dnstwist...")
     results['dnstwist'] = run_command(f"dnstwist {domain}")
+    if progress_callback:
+        progress_callback("✅ Similar domain check done. Searching public documents...")
 
     # 6. metagoofil
     print("[*] Running metagoofil...")
     results['metagoofil'] = run_command(
-        f"cd ~/metagoofil && python3 metagoofil.py -d {domain} -t pdf,doc,xls -l 10 -n 5 -o /tmp/meta_{domain} -f meta_{domain}.html"
+        f"cd /home/runner/metagoofil && python3 metagoofil.py -d {domain} -t pdf,doc,xls -l 10 -n 5 -o /tmp/meta_{domain} -f meta_{domain}.html"
     )
     meta_report = f"/tmp/meta_{domain}/meta_{domain}.html"
     if os.path.exists(meta_report):
@@ -139,16 +166,15 @@ def run_scan(domain: str, email: str = "") -> dict:
         shutil.rmtree(f"/tmp/meta_{domain}")
     else:
         results['metagoofil'] = "No metadata found or command failed."
+    if progress_callback:
+        progress_callback("✅ Document metadata scan finished. Checking social media...")
 
     # 7. sherlock
     company_name = domain.split('.')[0]
     print("[*] Running Sherlock...")
-    results['sherlock'] = run_command(f"cd ~/sherlock && python3 sherlock.py {company_name} --timeout 10")
-
-    # 8. spiderfoot
-    print("[*] Running SpiderFoot...")
-    sf_cmd = f"spiderfoot -s {domain} -q -o json"
-    results['spiderfoot'] = run_command(sf_cmd)
+    results['sherlock'] = run_command(f"cd /home/runner/sherlock && python3 sherlock.py {company_name} --timeout 10")
+    if progress_callback:
+        progress_callback("✅ Social media presence found. Finalizing report...")
 
     # Store scan in database
     report_text = json.dumps(results, indent=2)
@@ -166,7 +192,7 @@ def format_report(domain: str, results: dict) -> str:
     # ---------- TECHNOLOGIES (WhatWeb) ----------
     if 'whatweb' in results:
         whatweb_raw = results['whatweb']
-        clean = re.sub(r'\x1b\[[0-9;]*m', '', whatweb_raw)   # remove color codes
+        clean = re.sub(r'\x1b\[[0-9;]*m', '', whatweb_raw)
         if 'HTTPServer' in clean:
             server = re.findall(r'HTTPServer\[ (.*?) \]', clean)
             if server:
@@ -248,22 +274,6 @@ def format_report(domain: str, results: dict) -> str:
                 report += f"• {line}\n"
             report += "\n"
 
-    # ---------- SPIDERFOOT ----------
-    if 'spiderfoot' in results:
-        sf_out = results['spiderfoot']
-        try:
-            data = json.loads(sf_out) if sf_out.strip().startswith('[') else []
-            if data:
-                types = set()
-                for entry in data:
-                    if 'type' in entry:
-                        types.add(entry['type'])
-                report += f"🕸️ **SpiderFoot OSINT:** Found data categories: {', '.join(list(types)[:10])}\n\n"
-            else:
-                report += "🕸️ SpiderFoot: No public data collected.\n\n"
-        except:
-            report += "🕸️ SpiderFoot scan complete (detailed log available).\n\n"
-
     report += "📌 *Phantom Watch – Automated Security Reconnaissance*\n"
     report += "_Interpretation by a professional recommended._"
     return report
@@ -291,12 +301,14 @@ async def adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan = context.args[1] if len(context.args) > 1 else "free"
     months = int(context.args[2]) if len(context.args) > 2 else 0
     add_client(target_username, plan if plan in ["free","monthly","enterprise"] else "free")
+    if plan == "free":
+        set_free_expiry(target_username)  # 7-day free trial
     if plan != "free" and months > 0:
         set_plan(target_username, plan, months)
     await update.message.reply_text(f"✅ User @{target_username} added with {plan} plan.")
 
 async def verify_domain_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command: /verify @username example.com  (manually approve domain ownership)"""
+    """Admin command: /verify @username example.com (manually approve domain ownership)"""
     if update.message.from_user.username != ADMIN_USERNAME:
         await update.message.reply_text("❌ Admin only.")
         return
@@ -305,8 +317,7 @@ async def verify_domain_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     target_username = context.args[0].lstrip('@')
     domain = context.args[1].lower()
-    c.execute("SELECT username FROM clients WHERE username=?", (target_username,))
-    if not c.fetchone():
+    if not is_client(target_username):
         await update.message.reply_text(f"User @{target_username} is not a client yet. Add them first with /adduser.")
         return
     c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)",
@@ -316,8 +327,8 @@ async def verify_domain_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def setemail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user.username
-    if not user or not is_client(user):
-        await update.message.reply_text("❌ Not authorized.")
+    if not user or not is_subscription_active(user):
+        await update.message.reply_text("❌ Not authorized or subscription expired.")
         return
     if not context.args:
         await update.message.reply_text("Usage: /setemail your@email.com")
@@ -333,8 +344,8 @@ async def handle_domain(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not username:
         await update.message.reply_text("You must have a Telegram username to use Phantom Watch.")
         return
-    if not is_client(username):
-        await update.message.reply_text("⛔ You are not an authorized client. Contact the admin.")
+    if not is_subscription_active(username):
+        await update.message.reply_text("⛔ You are not an authorized client or your subscription has expired. Contact the admin.")
         return
     domain = update.message.text.strip().lower()
     domain_pattern = r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$'
@@ -344,13 +355,12 @@ async def handle_domain(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ---------- Simplified Verification ----------
     if username == ADMIN_USERNAME:
-        # Admin bypass, scan immediately
-        pass
+        pass  # admin bypass
     else:
         c.execute("SELECT token FROM verification WHERE username=? AND domain=?", (username, domain))
         row = c.fetchone()
         if row and row[0] == "admin_verified":
-            pass  # Admin manually approved
+            pass  # admin manually approved
         elif row and row[0] != "admin_verified":
             token = row[0]
             if not verify_domain(domain, token):
@@ -374,6 +384,13 @@ async def handle_domain(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await asyncio.sleep(2)
         await update.message.reply_text("✅ Domain verified. Launching full Phantom Watch scan... (may take 5-10 minutes)")
 
+    chat_id = update.message.chat_id
+    async def send_progress(msg):
+        await context.bot.send_message(chat_id=chat_id, text=msg)
+
+    def sync_progress(msg):
+        asyncio.run_coroutine_threadsafe(send_progress(msg), context.application.loop)
+
     print(f"[*] Scan started for {domain} by @{username}")
     await notify_admin(f"🔔 Scan started for {domain} by @{username}", context)
 
@@ -382,11 +399,11 @@ async def handle_domain(update: Update, context: ContextTypes.DEFAULT_TYPE):
     email_row = c.fetchone()
     email = email_row[0] if email_row else ""
 
-    # Run the scan in a separate thread (CPU-bound)
+    # Run the scan with progress updates
     loop = asyncio.get_running_loop()
-    results = await loop.run_in_executor(None, run_scan, domain, email)
+    results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress)
 
-    # Format and send the report
+    # Format and send the final report
     report = format_report(domain, results)
     max_len = 4000
     for i in range(0, len(report), max_len):
@@ -421,14 +438,12 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log errors and prevent crashes from network timeouts."""
     err = context.error
     if isinstance(err, telegram.error.TimedOut):
         print(f"[!] Network timeout. Bot stays alive. Details: {err}")
     else:
         print(f"[!] Unhandled error: {err}")
 
-# ------------------ Main ------------------
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
