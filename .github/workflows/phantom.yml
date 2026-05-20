@@ -17,9 +17,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y nmap nikto whatweb git python3-pip curl
 
-      - name: Install Python-based tools
+      - name: Install Python-based tools (pip)
         run: |
-          pip3 install --break-system-packages theharvester dnstwist spiderfoot python-telegram-bot
+          pip3 install --break-system-packages theharvester dnstwist python-telegram-bot
 
       - name: Clone metagoofil into ~/metagoofil
         run: |
@@ -30,6 +30,14 @@ jobs:
           git clone https://github.com/sherlock-project/sherlock.git ~/sherlock
           cd ~/sherlock
           pip3 install --break-system-packages -r requirements.txt
+
+      - name: Clone spiderfoot and create a wrapper command
+        run: |
+          git clone https://github.com/smicallef/spiderfoot.git ~/spiderfoot
+          pip3 install --break-system-packages -r ~/spiderfoot/requirements.txt
+          # Create a globally available 'spiderfoot' command that runs sf.py
+          printf '#!/bin/bash\npython3 ~/spiderfoot/sf.py "$@"\n' | sudo tee /usr/local/bin/spiderfoot
+          sudo chmod +x /usr/local/bin/spiderfoot
 
       - name: Run Phantom Watch
         env:
