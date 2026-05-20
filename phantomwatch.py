@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Phantom Watch – Automated Security Reconnaissance Bot (Menu-Enhanced)
+Phantom Watch – Interactive Reconnaissance Bot
+Features: button wizards, animated progress, plain‑text reports, hardened scans.
 """
 
-import subprocess, re, os, sqlite3, random, string, shutil, json, time
+import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio, signal
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -11,21 +12,32 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
+    ConversationHandler,
     filters,
     ContextTypes,
 )
 import telegram.error
-import asyncio
 
 # ========== CONFIGURATION ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_CHAT_ID = None
 DB_FILE = "phantom_clients.db"
-SCAN_TIMEOUT = 180
+SCAN_TIMEOUT = 150  # per tool (seconds)
 # ===================================
 
-# Database
+# Conversation states
+(
+    ADDUSER_USERNAME,
+    ADDUSER_PLAN,
+    ADDUSER_MONTHS,
+    VERIFY_USERNAME,
+    VERIFY_DOMAIN,
+    SCAN_DOMAIN,
+    SET_EMAIL,
+) = range(7)
+
+# Database setup
 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS clients (
@@ -45,7 +57,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS scan_results (
 )''')
 conn.commit()
 
-# ---------- Helper Functions (unchanged) ----------
+# ---------- Helpers ----------
 def is_client(username: str) -> bool:
     c.execute("SELECT 1 FROM clients WHERE username=?", (username,))
     return c.fetchone() is not None
@@ -108,123 +120,118 @@ async def notify_admin(text: str, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"[!] Could not notify admin: {e}")
 
-# ---------- Scan Engine (with progress callback) ----------
+# ---------- Animated Progress Bar ----------
+async def send_animation(chat_id, context, stop_event):
+    """Send a moving progress bar every 10 seconds until stop_event is set."""
+    frames = ["[▓░░░░░░░░] 10%", "[▓▓░░░░░░░] 20%", "[▓▓▓░░░░░░] 30%", "[▓▓▓▓░░░░░] 40%",
+              "[▓▓▓▓▓░░░░] 50%", "[▓▓▓▓▓▓░░░] 60%", "[▓▓▓▓▓▓▓░░] 70%", "[▓▓▓▓▓▓▓▓░] 80%",
+              "[▓▓▓▓▓▓▓▓▓] 90%", "[▓▓▓▓▓▓▓▓▓] 99%"]
+    idx = 0
+    msg = await context.bot.send_message(chat_id=chat_id, text="🔥 Scanning started...")
+    while not stop_event.is_set():
+        await asyncio.sleep(10)
+        if stop_event.is_set():
+            break
+        frame = frames[idx % len(frames)]
+        try:
+            await msg.edit_text(f"🔄 {frame} Scan in progress...")
+        except:
+            pass
+        idx += 1
+    try:
+        await msg.delete()
+    except:
+        pass
+
+# ---------- Scan Engine (hardened) ----------
 def run_scan(domain: str, email: str = "", progress_callback=None, tools: list = None) -> dict:
     if tools is None:
         tools = ["nmap", "nikto", "whatweb", "theHarvester", "dnstwist", "metagoofil", "sherlock"]
     results = {}
-    print(f"[*] Starting scan for {domain}")
-
-    if "nmap" in tools:
-        print("[*] Running Nmap...")
-        results['nmap'] = run_command(f"nmap -sV -T4 --script vuln --top-ports 200 {domain}")
-        if progress_callback:
-            progress_callback("✅ Nmap finished.")
-
-    if "nikto" in tools:
-        print("[*] Running Nikto...")
-        results['nikto'] = run_command(f"nikto -h {domain} -T 123bde -maxtime 120s")
-        if progress_callback:
-            progress_callback("✅ Nikto done.")
-
-    if "whatweb" in tools:
-        print("[*] Running WhatWeb...")
-        results['whatweb'] = run_command(f"whatweb {domain}")
-        if progress_callback:
-            progress_callback("✅ WhatWeb completed.")
-
-    if "theHarvester" in tools:
-        if email:
-            print("[*] Running theHarvester...")
-            results['theHarvester'] = run_command(f"theHarvester -d {domain} -b google -f report_{domain}.html")
-            if os.path.exists(f"report_{domain}.html"):
-                with open(f"report_{domain}.html", "r") as f:
-                    results['theHarvester'] = f.read()
-                os.remove(f"report_{domain}.html")
+    for tool in tools:
+        if tool == "nmap":
+            if progress_callback: progress_callback("⚡ Nmap scanning ports & vulns...")
+            results['nmap'] = run_command(f"nmap -sV -T4 --script vuln --top-ports 200 {domain}")
+        elif tool == "nikto":
+            if progress_callback: progress_callback("🕵️ Nikto web server analysis...")
+            results['nikto'] = run_command(f"nikto -h {domain} -T 123bde -maxtime 120s")
+        elif tool == "whatweb":
+            if progress_callback: progress_callback("🔎 WhatWeb detecting technologies...")
+            results['whatweb'] = run_command(f"whatweb {domain}")
+        elif tool == "theHarvester":
+            if email:
+                results['theHarvester'] = run_command(f"theHarvester -d {domain} -b google -f report_{domain}.html")
+                if os.path.exists(f"report_{domain}.html"):
+                    with open(f"report_{domain}.html", "r") as f:
+                        results['theHarvester'] = f.read()
+                    os.remove(f"report_{domain}.html")
+                else:
+                    results['theHarvester'] = "No email results."
             else:
-                results['theHarvester'] = "No email results."
-        else:
-            results['theHarvester'] = "No email provided for OSINT."
-        if progress_callback:
-            progress_callback("✅ OSINT emails done.")
-
-    if "dnstwist" in tools:
-        print("[*] Running dnstwist...")
-        results['dnstwist'] = run_command(f"dnstwist {domain}")
-        if progress_callback:
-            progress_callback("✅ Typosquatting check done.")
-
-    if "metagoofil" in tools:
-        print("[*] Running metagoofil...")
-        results['metagoofil'] = run_command(
-            f"cd /home/runner/metagoofil && python3 metagoofil.py -d {domain} -t pdf,doc,xls -l 10 -n 5 -o /tmp/meta_{domain} -f meta_{domain}.html"
-        )
-        meta_report = f"/tmp/meta_{domain}/meta_{domain}.html"
-        if os.path.exists(meta_report):
-            with open(meta_report, "r") as f:
-                results['metagoofil'] = f.read()
-            shutil.rmtree(f"/tmp/meta_{domain}")
-        else:
-            results['metagoofil'] = "No metadata found or command failed."
-        if progress_callback:
-            progress_callback("✅ Document metadata done.")
-
-    if "sherlock" in tools:
-        company_name = domain.split('.')[0]
-        print("[*] Running Sherlock...")
-        results['sherlock'] = run_command(f"cd /home/runner/sherlock && python3 sherlock.py {company_name} --timeout 10")
-        if progress_callback:
-            progress_callback("✅ Social media scan done.")
-
-    # Store
+                results['theHarvester'] = "No email provided for OSINT."
+            if progress_callback: progress_callback("📧 OSINT email harvesting done.")
+        elif tool == "dnstwist":
+            if progress_callback: progress_callback("🔄 dnstwist checking similar domains...")
+            results['dnstwist'] = run_command(f"dnstwist {domain}")
+        elif tool == "metagoofil":
+            if progress_callback: progress_callback("📄 Metagoofil extracting metadata...")
+            results['metagoofil'] = run_command(
+                f"cd /home/runner/metagoofil && python3 metagoofil.py -d {domain} -t pdf,doc,xls -l 10 -n 5 -o /tmp/meta_{domain} -f meta_{domain}.html"
+            )
+            meta_report = f"/tmp/meta_{domain}/meta_{domain}.html"
+            if os.path.exists(meta_report):
+                with open(meta_report, "r") as f:
+                    results['metagoofil'] = f.read()
+                shutil.rmtree(f"/tmp/meta_{domain}")
+            else:
+                results['metagoofil'] = "No metadata found or command failed."
+        elif tool == "sherlock":
+            if progress_callback: progress_callback("👤 Sherlock searching social media...")
+            company_name = domain.split('.')[0]
+            results['sherlock'] = run_command(f"cd /home/runner/sherlock && python3 sherlock.py {company_name} --timeout 10")
+    # Save
     report_text = json.dumps(results, indent=2)
     c.execute("INSERT INTO scan_results (username, domain, timestamp, report) VALUES (?,?,?,?)",
               ("reserved", domain, datetime.now().isoformat(), report_text))
     conn.commit()
-    print(f"[✓] Scan finished for {domain}")
     return results
 
 def format_report(domain: str, results: dict) -> str:
-    # same as before (truncated for brevity, but copy the complete one you had)
+    """Plain‑text, clean report with no Markdown."""
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    report = f"🔍 **PHANTOM WATCH SECURITY REPORT**\n`{domain}`\n_{now}_\n\n"
+    report = f"🔍 PHANTOM WATCH SECURITY REPORT\n{domain}\n{now}\n\n"
 
     if 'whatweb' in results:
-        whatweb_raw = results['whatweb']
-        clean = re.sub(r'\x1b\[[0-9;]*m', '', whatweb_raw)
+        clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
         if 'HTTPServer' in clean:
             server = re.findall(r'HTTPServer\[ (.*?) \]', clean)
-            if server:
-                report += f"🖥 **Web Server:** {server[0]}\n"
+            if server: report += f"🖥 Web Server: {server[0]}\n"
         if 'Cloudflare' in clean or 'cloudflare' in clean:
-            report += "🛡️ **Cloudflare Detected** — site is behind a CDN/WAF (extra protection)\n"
+            report += "🛡️ Cloudflare Detected — site behind CDN/WAF\n"
         if '403' in clean:
-            report += "🔒 Site returns *403 Forbidden* to scanners — good hardening.\n"
-        ip_matches = re.findall(r'IP\[ ([^\]]+) \]', clean)
-        if ip_matches:
-            report += f"🌐 **IPs Found:** {', '.join(ip_matches[:3])}\n"
+            report += "🔒 Site returns 403 Forbidden to scanners — good hardening.\n"
+        ips = re.findall(r'IP\[ ([^\]]+) \]', clean)
+        if ips: report += f"🌐 IPs Found: {', '.join(ips[:3])}\n"
         report += "\n"
 
     if 'nmap' in results:
-        nmap_out = results['nmap']
-        open_ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", nmap_out, re.MULTILINE)
+        open_ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", results['nmap'], re.MULTILINE)
         if open_ports:
-            report += "🛡️ **Open Ports & Services**\n"
+            report += "🛡️ Open Ports & Services\n"
             for line in open_ports[:10]:
                 report += f"• {line}\n"
             report += "\n"
-        vulns = re.findall(r"\|.*VULNERABLE.*", nmap_out)
+        vulns = re.findall(r"\|.*VULNERABLE.*", results['nmap'])
         if vulns:
-            report += "⚠️ **Potential Vulnerabilities**\n"
+            report += "⚠️ Potential Vulnerabilities\n"
             for v in vulns[:5]:
                 report += f"• {v.replace('|','').strip()}\n"
             report += "\n"
 
     if 'nikto' in results:
-        nikto_out = results['nikto']
-        findings = re.findall(r"\+ (.*)", nikto_out)
+        findings = re.findall(r"\+ (.*)", results['nikto'])
         if findings:
-            report += "🔥 **Web Security Issues (Nikto)**\n"
+            report += "🔥 Web Security Issues (Nikto)\n"
             for f in findings[:8]:
                 report += f"• {f}\n"
             report += "\n"
@@ -234,44 +241,42 @@ def format_report(domain: str, results: dict) -> str:
         if "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
             if emails:
-                report += f"📧 **Leaked Emails Found ({len(emails)}):** {', '.join(emails[:5])}\n\n"
+                report += f"📧 Leaked Emails Found ({len(emails)}): {', '.join(emails[:5])}\n\n"
         else:
-            report += f"📡 **OSINT Summary:** {harvest[:300]}\n\n"
+            report += f"📡 OSINT Summary: {harvest[:300]}\n\n"
 
     if 'dnstwist' in results:
-        dnstwist_out = results['dnstwist']
-        registered = re.findall(r"^([^ ]+)\s+registered.*", dnstwist_out, re.MULTILINE)
+        registered = re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE)
         if registered:
-            report += "🕵️ **Similar Domains Registered (Typosquatting Risk)**\n"
+            report += "🕵️ Similar Domains Registered (Typosquatting Risk)\n"
             for d in registered[:6]:
                 report += f"• {d}\n"
             report += "\n"
 
     if 'metagoofil' in results and 'No dangerous' not in results['metagoofil']:
         meta = results['metagoofil']
-        report += "📄 **Document Metadata Exposure**\n"
+        report += "📄 Document Metadata Exposure\n"
         if 'usernames' in meta.lower() or 'path' in meta.lower():
             report += "⚠️ Sensitive info (usernames/paths) found in public documents.\n"
         else:
             report += f"{meta[:200]}\n"
         report += "\n"
     elif 'metagoofil' in results:
-        report += "📄 **Document Metadata:** No leaks detected.\n\n"
+        report += "📄 Document Metadata: No leaks detected.\n\n"
 
     if 'sherlock' in results:
-        sherlock_out = results['sherlock']
-        found = re.findall(r"\[\+\] (.*)", sherlock_out)
+        found = re.findall(r"\[\+\] (.*)", results['sherlock'])
         if found:
-            report += "👥 **Social Media Presence**\n"
+            report += "👥 Social Media Presence\n"
             for line in found[:10]:
                 report += f"• {line}\n"
             report += "\n"
 
-    report += "📌 *Phantom Watch – Automated Security Reconnaissance*\n"
-    report += "_Interpretation by a professional recommended._"
+    report += "📌 Phantom Watch – Automated Security Reconnaissance\n"
+    report += "Interpretation by a professional recommended."
     return report
 
-# ========== MENUS & KEYBOARDS ==========
+# ==================== BUTTON MENUS ====================
 def main_menu_keyboard(user_is_admin=False):
     buttons = [
         [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full")],
@@ -293,7 +298,6 @@ def admin_menu_keyboard():
     return InlineKeyboardMarkup(buttons)
 
 def quick_scan_keyboard():
-    # Predefined scan packs
     buttons = [
         [InlineKeyboardButton("🛡️ Ports & Vulns (nmap+nikto)", callback_data="quick_ports")],
         [InlineKeyboardButton("🌐 OSINT Pack (theHarvester+sherlock)", callback_data="quick_osint")],
@@ -302,7 +306,7 @@ def quick_scan_keyboard():
     ]
     return InlineKeyboardMarkup(buttons)
 
-# ========== CALLBACK HANDLERS ==========
+# ==================== CALLBACK HANDLER ====================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -314,27 +318,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🔮 Phantom Watch – Main Menu", reply_markup=main_menu_keyboard(admin))
         return
 
-    # Scan selections
     if data in ["scan_full", "scan_quick"]:
         if not is_subscription_active(username):
-            await query.edit_message_text("⛔ Your subscription is inactive. Contact admin.")
+            await query.edit_message_text("⛔ Subscription expired. Contact admin.")
             return
         if data == "scan_full":
             context.user_data['scan_type'] = 'full'
             context.user_data['tools'] = None
         else:
-            # Show quick scan subtypes
             await query.edit_message_text("Choose a quick scan type:", reply_markup=quick_scan_keyboard())
             return
-        # Ask for domain
-        await query.edit_message_text("📌 Please send the domain you want to scan (e.g., example.com).")
-        context.user_data['state'] = 'WAITING_DOMAIN'
+        await query.edit_message_text("📌 Send the domain name (e.g., example.com) to scan.")
+        context.user_data['state'] = SCAN_DOMAIN
         return
 
-    # Quick scan sub-options
     if data.startswith("quick_"):
         if not is_subscription_active(username):
-            await query.edit_message_text("⛔ Subscription inactive.")
+            await query.edit_message_text("⛔ Subscription expired.")
             return
         if data == "quick_ports":
             tools = ["nmap", "nikto"]
@@ -346,92 +346,175 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tools = None
         context.user_data['scan_type'] = 'quick'
         context.user_data['tools'] = tools
-        await query.edit_message_text("📌 Please send the domain you want to scan.")
-        context.user_data['state'] = 'WAITING_DOMAIN'
+        await query.edit_message_text("📌 Send the domain name to scan.")
+        context.user_data['state'] = SCAN_DOMAIN
         return
 
-    # Set email flow
     if data == "set_email":
         if not is_subscription_active(username):
-            await query.edit_message_text("⛔ Subscription inactive.")
+            await query.edit_message_text("⛔ Subscription expired.")
             return
-        await query.edit_message_text("📧 Please send your email address (used for OSINT scans).")
-        context.user_data['state'] = 'WAITING_EMAIL'
+        await query.edit_message_text("📧 Please send your email address:")
+        context.user_data['state'] = SET_EMAIL
         return
 
-    # Help
     if data == "help":
         help_text = (
-            "🔍 **Full Scan** – uses all 7 tools.\n"
-            "⚡ **Quick Scan** – choose a specific tool pack.\n"
-            "📧 **Set Email** – improve OSINT results.\n"
-            "Send `/start` to return here anytime."
+            "🔍 Full Scan – all 7 tools.\n"
+            "⚡ Quick Scan – select a specific pack.\n"
+            "📧 Set Email – enhances OSINT.\n"
+            "Use /start anytime to return."
         )
         await query.edit_message_text(help_text, reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
-    # Admin menu
+    # Admin menus
     if data == "admin_menu":
         if username != ADMIN_USERNAME:
-            await query.edit_message_text("❌ Admin only.", reply_markup=main_menu_keyboard(False))
+            await query.edit_message_text("❌ Admin only.")
             return
         await query.edit_message_text("👑 Admin Panel", reply_markup=admin_menu_keyboard())
         return
 
     if data == "admin_adduser":
-        if username != ADMIN_USERNAME:
-            return
-        await query.edit_message_text("To add a user, use command:\n`/adduser @username plan months`\nExample: `/adduser @john free`")
+        if username != ADMIN_USERNAME: return
+        # Start add-user wizard
+        await query.edit_message_text("Enter the Telegram username of the client (with @):")
+        context.user_data['state'] = ADDUSER_USERNAME
         return
 
     if data == "admin_verify":
-        if username != ADMIN_USERNAME:
-            return
-        await query.edit_message_text("To verify a domain manually:\n`/verify @username domain.com`")
+        if username != ADMIN_USERNAME: return
+        await query.edit_message_text("Enter the username of the client (with @):")
+        context.user_data['state'] = VERIFY_USERNAME
         return
 
     if data == "admin_status":
-        if username != ADMIN_USERNAME:
-            return
+        if username != ADMIN_USERNAME: return
         c.execute("SELECT username, plan, expiry FROM clients")
         clients = c.fetchall()
-        msg = "📊 **Client List**\n\n"
+        msg = "📊 Client List\n\n"
         for u, p, e in clients:
             msg += f"@{u} - {p}"
-            if e:
-                msg += f" (exp: {e})"
+            if e: msg += f" (exp: {e})"
             msg += "\n"
         await query.edit_message_text(msg, reply_markup=admin_menu_keyboard())
         return
 
-# ========== TEXT MESSAGE HANDLER (for domain/email input) ==========
+# ==================== MESSAGE HANDLER (states) ====================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     username = user.username
-    text = update.message.text.strip().lower()
-    state = context.user_data.get('state', '')
+    text = update.message.text.strip()
+    state = context.user_data.get('state')
 
-    if state == 'WAITING_DOMAIN':
-        # Validate domain
-        domain_pattern = r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$'
-        if not re.match(domain_pattern, text):
-            await update.message.reply_text("❌ Invalid domain. Send like example.com")
+    # ----- ADMIN ADD USER WIZARD -----
+    if state == ADDUSER_USERNAME:
+        if username != ADMIN_USERNAME:
+            await update.message.reply_text("❌ Admin only.")
             return
-        domain = text
+        target = text.lstrip('@')
+        if not target:
+            await update.message.reply_text("Invalid. Enter username with @:")
+            return
+        context.user_data['add_target'] = target
+        await update.message.reply_text("Plan? (free, monthly, enterprise):")
+        context.user_data['state'] = ADDUSER_PLAN
+        return
+
+    if state == ADDUSER_PLAN:
+        plan = text.lower()
+        if plan not in ["free", "monthly", "enterprise"]:
+            await update.message.reply_text("Invalid plan. Use free, monthly, or enterprise:")
+            return
+        context.user_data['add_plan'] = plan
+        if plan == "free":
+            # No months needed
+            await update.message.reply_text("How many months? (0 for default free trial):")
+            context.user_data['state'] = ADDUSER_MONTHS
+        else:
+            await update.message.reply_text("How many months?")
+            context.user_data['state'] = ADDUSER_MONTHS
+        return
+
+    if state == ADDUSER_MONTHS:
+        try:
+            months = int(text)
+        except:
+            await update.message.reply_text("Enter a number (0-12):")
+            return
+        target = context.user_data['add_target']
+        plan = context.user_data['add_plan']
+        add_client(target, plan)
+        if plan == "free":
+            set_free_expiry(target)
+        elif months > 0:
+            set_plan(target, plan, months)
+        await update.message.reply_text(f"✅ Added @{target} with {plan} plan for {months} months.",
+                                        reply_markup=admin_menu_keyboard())
+        # Clear state
+        for k in ('add_target', 'add_plan', 'state'):
+            context.user_data.pop(k, None)
+        return
+
+    # ----- ADMIN VERIFY DOMAIN WIZARD -----
+    if state == VERIFY_USERNAME:
+        if username != ADMIN_USERNAME:
+            await update.message.reply_text("❌ Admin only.")
+            return
+        target = text.lstrip('@')
+        if not is_client(target):
+            await update.message.reply_text("User not a client. Add them first.")
+            return
+        context.user_data['verify_target'] = target
+        await update.message.reply_text("Domain to verify (e.g., example.com):")
+        context.user_data['state'] = VERIFY_DOMAIN
+        return
+
+    if state == VERIFY_DOMAIN:
+        target = context.user_data['verify_target']
+        domain = text.lower()
+        c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)",
+                  (target, domain, "admin_verified"))
+        conn.commit()
+        await update.message.reply_text(f"✅ Domain {domain} manually verified for @{target}.",
+                                        reply_markup=admin_menu_keyboard())
+        for k in ('verify_target', 'state'):
+            context.user_data.pop(k, None)
+        return
+
+    # ----- CLIENT SET EMAIL -----
+    if state == SET_EMAIL:
+        if '@' not in text:
+            await update.message.reply_text("Invalid email. Send again:")
+            return
+        c.execute("UPDATE clients SET email_collect=? WHERE username=?", (text, username))
+        conn.commit()
+        await update.message.reply_text(f"✅ Email set to {text}.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        context.user_data.pop('state', None)
+        return
+
+    # ----- CLIENT SENDS DOMAIN FOR SCAN -----
+    if state == SCAN_DOMAIN:
+        domain = text.lower()
+        if not re.match(r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$', domain):
+            await update.message.reply_text("❌ Invalid domain. Please try again.")
+            return
+
+        # Subscription check
         if not is_subscription_active(username):
             await update.message.reply_text("⛔ Subscription expired or not authorized.")
             return
-        # Verification logic (same as before, simplified)
-        if username == ADMIN_USERNAME:
-            pass
-        else:
+
+        # Verification
+        if username != ADMIN_USERNAME:
             c.execute("SELECT token FROM verification WHERE username=? AND domain=?", (username, domain))
             row = c.fetchone()
             if row and row[0] == "admin_verified":
                 pass
             elif row and row[0] != "admin_verified":
                 if not verify_domain(domain, row[0]):
-                    await update.message.reply_text("⏳ Verification file missing. Upload verify.txt or ask admin to approve.")
+                    await update.message.reply_text("⏳ Verification file missing. Upload verify.txt or ask admin.")
                     return
             else:
                 token = generate_token()
@@ -443,126 +526,85 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # Start scan
-        await update.message.reply_text("✅ Domain verified. Launching scan... (progress updates will appear)")
-
+        # Start scan with animation
+        await update.message.reply_text("✅ Domain verified. Launching scan...")
         chat_id = update.message.chat_id
-        async def send_progress(msg):
-            await context.bot.send_message(chat_id=chat_id, text=msg)
-        def sync_progress(msg):
-            asyncio.run_coroutine_threadsafe(send_progress(msg), context.application.loop)
 
-        # Get email if set
+        # Stop event for animation
+        stop_anim = asyncio.Event()
+        anim_task = asyncio.create_task(send_animation(chat_id, context, stop_anim))
+
+        # Progress callback (edit a single progress message)
+        progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
+        def sync_progress(msg):
+            async def update_progress():
+                try:
+                    await progress_msg.edit_text(msg)
+                except:
+                    pass
+            asyncio.run_coroutine_threadsafe(update_progress(), context.application.loop)
+
+        # Get email
         c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
         row = c.fetchone()
         email = row[0] if row else ""
 
         # Determine tools
-        scan_type = context.user_data.get('scan_type', 'full')
         tools = context.user_data.get('tools', None)
 
         loop = asyncio.get_running_loop()
-        results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools)
+        try:
+            results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools)
+        except Exception as e:
+            await update.message.reply_text(f"❌ Scan crashed: {e}")
+        finally:
+            stop_anim.set()
+            await anim_task
+            try:
+                await progress_msg.delete()
+            except:
+                pass
+
+        # Generate and send report (plain text, no parse_mode)
         report = format_report(domain, results)
-        # Send report in chunks
+        # Telegram limit 4096, split if needed
         max_len = 4000
         for i in range(0, len(report), max_len):
-            await update.message.reply_text(report[i:i+max_len], parse_mode='Markdown')
-        # Reset state
+            await context.bot.send_message(chat_id=chat_id, text=report[i:i+max_len])
+
+        # Cleanup state and show menu
         context.user_data.pop('state', None)
         context.user_data.pop('scan_type', None)
         context.user_data.pop('tools', None)
-        # Return to main menu
-        await update.message.reply_text("🔮 What would you like to do next?", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        await update.message.reply_text("🔮 What's next?", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
-    elif state == 'WAITING_EMAIL':
-        email = text
-        if '@' not in email:
-            await update.message.reply_text("Invalid email. Please send a valid email address.")
-            return
-        c.execute("UPDATE clients SET email_collect=? WHERE username=?", (email, username))
-        conn.commit()
-        await update.message.reply_text(f"✅ Email set to {email}.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
-        context.user_data.pop('state', None)
-        return
+    # Fallback: show menu
+    await update.message.reply_text("🔮 Use the buttons below.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
 
-    # Fallback: if no state, treat as possible domain for backward compatibility
-    if not state:
-        # Just redirect to /start
-        await start(update, context)
-        return
-
-# ========== ORIGINAL COMMAND HANDLERS (for /start, /adduser, etc.) ==========
+# ==================== COMMAND HANDLERS ====================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global ADMIN_CHAT_ID
     user = update.message.from_user
     if user.username == ADMIN_USERNAME:
         ADMIN_CHAT_ID = update.message.chat_id
-        print(f"[*] Admin chat ID set to {ADMIN_CHAT_ID}")
-    await update.message.reply_text(
-        "🔮 **Phantom Watch** – Your Security Reconnaissance Bot\nChoose an option below:",
-        reply_markup=main_menu_keyboard(user.username == ADMIN_USERNAME)
-    )
-
-async def adduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.username != ADMIN_USERNAME:
-        await update.message.reply_text("❌ Admin only.")
-        return
-    if not context.args:
-        await update.message.reply_text("Usage: /adduser @username [plan] [months]\nExample: /adduser @john monthly 1")
-        return
-    target_username = context.args[0].lstrip('@')
-    plan = context.args[1] if len(context.args) > 1 else "free"
-    months = int(context.args[2]) if len(context.args) > 2 else 0
-    add_client(target_username, plan if plan in ["free","monthly","enterprise"] else "free")
-    if plan == "free":
-        set_free_expiry(target_username)
-    if plan != "free" and months > 0:
-        set_plan(target_username, plan, months)
-    await update.message.reply_text(f"✅ User @{target_username} added with {plan} plan.")
-
-async def verify_domain_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.username != ADMIN_USERNAME:
-        await update.message.reply_text("❌ Admin only.")
-        return
-    if len(context.args) < 2:
-        await update.message.reply_text("Usage: /verify @username domain.com")
-        return
-    target_username = context.args[0].lstrip('@')
-    domain = context.args[1].lower()
-    if not is_client(target_username):
-        await update.message.reply_text("User not a client. Add first with /adduser.")
-        return
-    c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)",
-              (target_username, domain, "admin_verified"))
-    conn.commit()
-    await update.message.reply_text(f"✅ Domain {domain} manually verified for @{target_username}.")
-
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Use the buttons below. Commands for admin:\n"
-        "/adduser @user plan months\n/verify @user domain\n/status"
-    )
+    await update.message.reply_text("🔮 Welcome to Phantom Watch.",
+                                    reply_markup=main_menu_keyboard(user.username == ADMIN_USERNAME))
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     err = context.error
     if isinstance(err, telegram.error.TimedOut):
         print(f"[!] Network timeout: {err}")
     else:
-        print(f"[!] Error: {err}")
+        print(f"[!] Unhandled error: {err}")
 
-# ========== MAIN ==========
+# ==================== MAIN ====================
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("adduser", adduser))
-    app.add_handler(CommandHandler("verify", verify_domain_cmd))
-    app.add_handler(CommandHandler("help", help_cmd))
-    # Callback handler for inline buttons
     app.add_handler(CallbackQueryHandler(button_handler))
-    # Message handler for domain/email inputs
+    # Message handler catches all text (for wizard states and domain input)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(error_handler)
 
