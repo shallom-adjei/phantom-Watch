@@ -542,7 +542,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await progress_msg.edit_text(msg)
                 except:
                     pass
-            asyncio.run_coroutine_threadsafe(update_progress(), context.application.loop)
+            context.application.create_task(_update_progress())
 
         # Get email
         c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
