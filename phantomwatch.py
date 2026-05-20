@@ -536,8 +536,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Progress callback (edit a single progress message)
         progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
+        # Capture the event loop BEFORE entering the executor
+        loop = asyncio.get_running_loop()
         def sync_progress(msg):
-            context.application.create_task(progress_msg.edit_text(msg))
+            async def _upd():
+                try:
+                    await progress_msg.edit_text(msg)
+                except Exception:
+                    pass  # ignore if message was deleted
+            asyncio.run_coroutine_threadsafe(_upd(), loop)
         # Get email
         c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
         row = c.fetchone()
