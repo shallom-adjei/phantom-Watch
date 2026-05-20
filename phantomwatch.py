@@ -16,10 +16,11 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import telegram.error
 import asyncio
+import os
 
 # ========== CONFIGURATION ==========
-BOT_TOKEN = os.getenv("8908324765:AAF95UXFERMfUJatoLUlLxRqhEVF3RWq298")   # ⚠️ Keep secret!
-ADMIN_USERNAME = os.getenv("StewieCyfer")                                  # Your Telegram username (without @)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_CHAT_ID = None                                            # Set automatically after /start
 DB_FILE = "phantom_clients.db"
 SCAN_TIMEOUT = 180  # seconds max per tool
