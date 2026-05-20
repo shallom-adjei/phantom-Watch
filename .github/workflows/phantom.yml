@@ -2,37 +2,34 @@ name: Phantom Watch Bot
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # runs every 6 hours
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
   bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 360     # 6 hours max per run
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Install system dependencies (apt)
         run: |
           sudo apt-get update
-          sudo apt-get install -y nmap nikto whatweb theharvester dnstwist git python3-pip curl
+          sudo apt-get install -y nmap nikto whatweb git python3-pip curl
 
-      - name: Install metagoofil
+      - name: Install Python-based tools
         run: |
-          git clone https://github.com/laramies/metagoofil.git /tmp/metagoofil
-          cd /tmp/metagoofil && sudo cp -r * /usr/local/bin/metagoofil || true
+          pip3 install --break-system-packages theharvester dnstwist spiderfoot python-telegram-bot
 
-      - name: Install sherlock
+      - name: Clone metagoofil into ~/metagoofil
         run: |
-          git clone https://github.com/sherlock-project/sherlock.git /opt/sherlock
-          cd /opt/sherlock && pip3 install -r requirements.txt --break-system-packages
+          git clone https://github.com/laramies/metagoofil.git ~/metagoofil
 
-      - name: Install spiderfoot
+      - name: Clone sherlock into ~/sherlock and install its dependencies
         run: |
-          sudo apt-get install -y spiderfoot
-
-      - name: Install python-telegram-bot
-        run: pip3 install python-telegram-bot --break-system-packages
+          git clone https://github.com/sherlock-project/sherlock.git ~/sherlock
+          cd ~/sherlock
+          pip3 install --break-system-packages -r requirements.txt
 
       - name: Run Phantom Watch
         env:
