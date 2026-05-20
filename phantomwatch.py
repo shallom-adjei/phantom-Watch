@@ -537,13 +537,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Progress callback (edit a single progress message)
         progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
         def sync_progress(msg):
-            async def update_progress():
-                try:
-                    await progress_msg.edit_text(msg)
-                except:
-                    pass
-            context.application.create_task(_update_progress())
-
+            context.application.create_task(progress_msg.edit_text(msg))
         # Get email
         c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
         row = c.fetchone()
