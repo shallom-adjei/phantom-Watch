@@ -30,7 +30,7 @@ def add_client(username, plan="free", months=0):
         expiry = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
     elif months > 0:
         expiry = (datetime.now() + timedelta(days=30*months)).strftime("%Y-%m-%d")
-    c.execute("INSERT OR REPLACE INTO clients VALUES (?,?,?)", (username, plan, expiry))
+    c.execute("INSERT OR REPLACE INTO clients VALUES (?,?,?,?)", (username, plan, expiry, ""))
     conn.commit()
 def generate_token(): return ''.join(random.choices(string.ascii_letters + string.digits, k=20))
 def verify_domain(domain, token):
