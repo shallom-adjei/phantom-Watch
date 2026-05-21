@@ -193,22 +193,24 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
     conn.commit()
     return results
 
+# ==================== REPORT WITH BOLD HIGHLIGHTS ====================
 def format_report(domain: str, results: dict) -> str:
-    """Structured report with Finding, Exploitation, Remediation."""
+    """Structured report with bold labels for easy reading. Markdown enabled."""
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     report = []
-    report.append(f"🔍 PHANTOM WATCH SECURITY REPORT")
-    report.append(f"Domain: {domain}")
+    report.append(f"🔍 *PHANTOM WATCH SECURITY REPORT*")
+    report.append(f"Domain: `{domain}`")
     report.append(f"Generated: {now}")
-    report.append("=" * 40)
+    report.append("─" * 35)
 
+    # ---------- TECHNOLOGY STACK ----------
     if 'whatweb' in results:
         clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
         server = re.findall(r'HTTPServer\[ (.*?) \]', clean)
         has_cloudflare = 'Cloudflare' in clean or 'cloudflare' in clean
         has_403 = '403' in clean
         ips = re.findall(r'IP\[ ([^\]]+) \]', clean)
-        report.append("\n🧩 TECHNOLOGY STACK")
+        report.append("\n🧩 *TECHNOLOGY STACK*")
         if server: report.append(f"  • Web Server : {server[0]}")
         if has_cloudflare: report.append("  • CDN/WAF    : Cloudflare (extra protection)")
         if has_403: report.append("  • Access     : 403 Forbidden (good hardening)")
@@ -216,97 +218,103 @@ def format_report(domain: str, results: dict) -> str:
         if not (server or has_cloudflare or has_403 or ips):
             report.append("  No detailed technology info captured.")
 
+    # ---------- NETWORK & PORT EXPOSURE ----------
     if 'nmap' in results:
-        report.append("\n" + "=" * 40)
-        report.append("🛡️ NETWORK & PORT EXPOSURE (Nmap)")
+        report.append("\n" + "─" * 35)
+        report.append("🛡️ *NETWORK & PORT EXPOSURE (Nmap)*")
         open_ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", results['nmap'], re.MULTILINE)
         vulns = re.findall(r"\|.*VULNERABLE.*", results['nmap'])
         if open_ports:
             for port_line in open_ports[:5]:
-                report.append(f"  • Finding: Open port {port_line}")
-                report.append(f"    Exploitation: Attackers can exploit outdated services, brute‑force, or gain unauthorised access.")
-                report.append(f"    Remediation: Close if not needed, apply firewall, patch regularly, use VPN for admin ports.")
+                report.append(f"  • *Finding:* Open port {port_line}")
+                report.append(f"    *Exploitation:* Attackers can exploit outdated services, brute‑force, or gain unauthorised access.")
+                report.append(f"    *Remediation:* Close if not needed, apply firewall, patch regularly, use VPN for admin ports.")
         if vulns:
             for v in vulns[:3]:
                 clean_v = v.replace('|','').strip()
-                report.append(f"  • Finding: Vulnerability detected – {clean_v}")
-                report.append(f"    Exploitation: May allow remote code execution, data theft, or service disruption.")
-                report.append(f"    Remediation: Apply latest patches, review CVE details, run thorough pentest.")
+                report.append(f"  • *Finding:* Vulnerability detected – {clean_v}")
+                report.append(f"    *Exploitation:* May allow remote code execution, data theft, or service disruption.")
+                report.append(f"    *Remediation:* Apply latest patches, review CVE details, run thorough pentest.")
         if not open_ports and not vulns:
             report.append("  No open ports or known vulns detected.")
 
+    # ---------- WEB APPLICATION ISSUES (Nikto) ----------
     if 'nikto' in results:
-        report.append("\n" + "=" * 40)
-        report.append("🔥 WEB APPLICATION ISSUES (Nikto)")
+        report.append("\n" + "─" * 35)
+        report.append("🔥 *WEB APPLICATION ISSUES (Nikto)*")
         findings = re.findall(r"\+ (.*)", results['nikto'])
         if findings:
             for f in findings[:5]:
-                report.append(f"  • Finding: {f}")
-                report.append(f"    Exploitation: Outdated software, missing headers, or sensitive files can lead to injection, data leaks, or defacement.")
-                report.append(f"    Remediation: Update all components, add security headers (CSP, X‑Frame‑Options), remove backup/test files.")
+                report.append(f"  • *Finding:* {f}")
+                report.append(f"    *Exploitation:* Outdated software, missing headers, or sensitive files can lead to injection, data leaks, or defacement.")
+                report.append(f"    *Remediation:* Update all components, add security headers (CSP, X‑Frame‑Options), remove backup/test files.")
         else:
             report.append("  No specific issues found.")
 
+    # ---------- EMAIL & OSINT LEAKS ----------
     if 'theHarvester' in results and results['theHarvester'] != "No email provided for OSINT.":
-        report.append("\n" + "=" * 40)
-        report.append("📧 EMAIL & OSINT LEAKS (theHarvester)")
+        report.append("\n" + "─" * 35)
+        report.append("📧 *EMAIL & OSINT LEAKS (theHarvester)*")
         harvest = results['theHarvester']
         emails = []
         if "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
         if emails:
-            report.append(f"  • Finding: Leaked emails ({len(emails)}) – {', '.join(emails[:5])}")
-            report.append(f"    Exploitation: Phishing, credential stuffing, social engineering.")
-            report.append(f"    Remediation: Implement SPF/DKIM/DMARC, train staff, use generic contact forms.")
+            report.append(f"  • *Finding:* Leaked emails ({len(emails)}) – {', '.join(emails[:5])}")
+            report.append(f"    *Exploitation:* Phishing, credential stuffing, social engineering.")
+            report.append(f"    *Remediation:* Implement SPF/DKIM/DMARC, train staff, use generic contact forms.")
         else:
             report.append("  No emails harvested (set email for deeper scan).")
     elif 'theHarvester' in results:
-        report.append("\n" + "=" * 40)
-        report.append("📧 EMAIL & OSINT LEAKS (theHarvester)")
+        report.append("\n" + "─" * 35)
+        report.append("📧 *EMAIL & OSINT LEAKS (theHarvester)*")
         report.append("  No email provided – email OSINT skipped.")
 
+    # ---------- TYPOSQUATTING ----------
     if 'dnstwist' in results:
-        report.append("\n" + "=" * 40)
-        report.append("🕵️ TYPOSQUATTING RISK (dnstwist)")
+        report.append("\n" + "─" * 35)
+        report.append("🕵️ *TYPOSQUATTING RISK (dnstwist)*")
         registered = re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE)
         if registered:
             for d in registered[:5]:
-                report.append(f"  • Finding: Similar domain registered – {d}")
-                report.append(f"    Exploitation: Phishing site could steal customer credentials.")
-                report.append(f"    Remediation: Monitor registrations, consider buying similar domains, report to registrar.")
+                report.append(f"  • *Finding:* Similar domain registered – {d}")
+                report.append(f"    *Exploitation:* Phishing site could steal customer credentials.")
+                report.append(f"    *Remediation:* Monitor registrations, consider buying similar domains, report to registrar.")
         else:
             report.append("  No suspicious similar domains registered.")
 
+    # ---------- DOCUMENT METADATA ----------
     if 'metagoofil' in results and 'No dangerous' not in results['metagoofil']:
-        report.append("\n" + "=" * 40)
-        report.append("📄 DOCUMENT METADATA EXPOSURE (Metagoofil)")
+        report.append("\n" + "─" * 35)
+        report.append("📄 *DOCUMENT METADATA EXPOSURE (Metagoofil)*")
         meta = results['metagoofil']
         if 'usernames' in meta.lower() or 'path' in meta.lower():
-            report.append("  • Finding: Sensitive info (usernames/paths) found in public documents.")
+            report.append("  • *Finding:* Sensitive info (usernames/paths) found in public documents.")
         else:
-            report.append(f"  • Finding: {meta[:200]}")
-        report.append(f"    Exploitation: Metadata reveals internal paths/software for targeted attacks.")
-        report.append(f"    Remediation: Strip metadata before publishing, avoid internal names in public docs.")
+            report.append(f"  • *Finding:* {meta[:200]}")
+        report.append(f"    *Exploitation:* Metadata reveals internal paths/software for targeted attacks.")
+        report.append(f"    *Remediation:* Strip metadata before publishing, avoid internal names in public docs.")
     elif 'metagoofil' in results:
-        report.append("\n" + "=" * 40)
-        report.append("📄 DOCUMENT METADATA (Metagoofil)")
+        report.append("\n" + "─" * 35)
+        report.append("📄 *DOCUMENT METADATA (Metagoofil)*")
         report.append("  No leaks detected.")
 
+    # ---------- SOCIAL MEDIA ----------
     if 'sherlock' in results:
-        report.append("\n" + "=" * 40)
-        report.append("👥 SOCIAL MEDIA PRESENCE (Sherlock)")
+        report.append("\n" + "─" * 35)
+        report.append("👥 *SOCIAL MEDIA PRESENCE (Sherlock)*")
         found = re.findall(r"\[\+\] (.*)", results['sherlock'])
         if found:
             for line in found[:5]:
-                report.append(f"  • Finding: Account found – {line}")
-            report.append(f"    Exploitation: Impersonation, social engineering, password guessing.")
-            report.append(f"    Remediation: Review privacy settings, enable 2FA, remove unused profiles.")
+                report.append(f"  • *Finding:* Account found – {line}")
+            report.append(f"    *Exploitation:* Impersonation, social engineering, password guessing.")
+            report.append(f"    *Remediation:* Review privacy settings, enable 2FA, remove unused profiles.")
         else:
             report.append("  No accounts detected for the domain name.")
 
-    report.append("\n" + "=" * 40)
-    report.append("📌 Report generated by Phantom Watch – Elite Reconnaissance")
-    report.append("Always consult a professional for full assessment.")
+    report.append("\n" + "─" * 35)
+    report.append("*Report generated by Phantom Watch – Elite Reconnaissance*")
+    report.append("_Always consult a professional for full assessment._")
     return "\n".join(report)
 
 # ==================== TOOL HELP TEXT ====================
@@ -358,18 +366,13 @@ TOOL_HELP = {
 def get_full_help_text() -> str:
     return "\n\n".join(TOOL_HELP.values())
 
-# ==================== BUTTON MENUS ====================
-# Persistent reply keyboard button
-menu_button = ReplyKeyboardMarkup(
-    [[KeyboardButton("🛡️ Menu")]], resize_keyboard=True, one_time_keyboard=False
-)
-
+# ==================== BUTTON MENUS (compact, two buttons per row) ====================
 def main_menu_keyboard(user_is_admin=False):
     buttons = [
-        [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full")],
-        [InlineKeyboardButton("⚡ Quick Scan", callback_data="scan_quick")],
-        [InlineKeyboardButton("📧 Set Email", callback_data="set_email")],
-        [InlineKeyboardButton("📖 How It Works", callback_data="how_it_works")],
+        [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full"),
+         InlineKeyboardButton("⚡ Quick Scan", callback_data="scan_quick")],
+        [InlineKeyboardButton("📧 Set Email", callback_data="set_email"),
+         InlineKeyboardButton("📖 How It Works", callback_data="how_it_works")],
         [InlineKeyboardButton("❓ Help", callback_data="help")],
     ]
     if user_is_admin:
@@ -378,21 +381,26 @@ def main_menu_keyboard(user_is_admin=False):
 
 def admin_menu_keyboard():
     buttons = [
-        [InlineKeyboardButton("➕ Add User", callback_data="admin_adduser")],
-        [InlineKeyboardButton("✅ Verify Domain", callback_data="admin_verify")],
-        [InlineKeyboardButton("📊 Status", callback_data="admin_status")],
-        [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
+        [InlineKeyboardButton("➕ Add User", callback_data="admin_adduser"),
+         InlineKeyboardButton("✅ Verify Domain", callback_data="admin_verify")],
+        [InlineKeyboardButton("📊 Status", callback_data="admin_status"),
+         InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ]
     return InlineKeyboardMarkup(buttons)
 
 def quick_scan_keyboard():
     buttons = [
-        [InlineKeyboardButton("🛡️ Ports & Vulns (nmap+nikto)", callback_data="quick_ports")],
-        [InlineKeyboardButton("🌐 OSINT Pack (theHarvester+sherlock)", callback_data="quick_osint")],
-        [InlineKeyboardButton("🔎 Recon (whatweb+dnstwist+metagoofil)", callback_data="quick_recon")],
+        [InlineKeyboardButton("🛡️ Ports & Vulns", callback_data="quick_ports")],
+        [InlineKeyboardButton("🌐 OSINT Pack", callback_data="quick_osint")],
+        [InlineKeyboardButton("🔎 Recon", callback_data="quick_recon")],
         [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ]
     return InlineKeyboardMarkup(buttons)
+
+# Persistent menu button next to text field
+menu_button = ReplyKeyboardMarkup(
+    [[KeyboardButton("🛡️ Menu")]], resize_keyboard=True, one_time_keyboard=False
+)
 
 # ==================== CALLBACK HANDLER ====================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -455,22 +463,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "5️⃣ *Continuous Protection* – Use the insights to close vulnerabilities before malicious actors discover them.\n\n"
             "💡 *Recommendation:* Set your email via the 📧 button to uncover exposed credentials associated with your domain."
         )
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=how_text,
-            parse_mode='Markdown'
-        )
+        await context.bot.send_message(chat_id=query.message.chat_id, text=how_text, parse_mode='Markdown')
         await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
     if data == "help":
         help_text = get_full_help_text()
         for i in range(0, len(help_text), 4000):
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text=help_text[i:i+4000],
-                parse_mode='Markdown'
-            )
+            await context.bot.send_message(chat_id=query.message.chat_id, text=help_text[i:i+4000], parse_mode='Markdown')
         await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
@@ -513,9 +513,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     state = context.user_data.get('state')
 
-    # Persistent menu button: if user taps "🛡️ Menu", show the main inline menu
+    # Persistent menu button tap
     if text == "🛡️ Menu":
-        await update.message.reply_text("Main Menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        await update.message.reply_text("Menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
     # ----- ADMIN ADD USER WIZARD -----
@@ -677,10 +677,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         finally:
             sem.release()
 
-        report = format_report(domain, results) if results else "❌ No results (scan failed)."
+        # Build report and send with Markdown for bold
+        report_text = format_report(domain, results) if results else "❌ No results (scan failed)."
         max_len = 4000
-        for i in range(0, len(report), max_len):
-            await context.bot.send_message(chat_id=chat_id, text=report[i:i+max_len])
+        for i in range(0, len(report_text), max_len):
+            chunk = report_text[i:i+max_len]
+            await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode='Markdown')
 
         context.user_data.pop('state', None)
         context.user_data.pop('scan_type', None)
@@ -688,9 +690,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔮 What's next?", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
-    # Fallback: show menu and keep the persistent button
+    # Fallback
     await update.message.reply_text(
-        "I didn't understand that. Use the buttons below, or tap *🛡️ Menu* next to the text field.",
+        "I didn't understand. Use the buttons, or tap *🛡️ Menu* next to the text field.",
         reply_markup=main_menu_keyboard(username == ADMIN_USERNAME),
         parse_mode='Markdown'
     )
@@ -702,7 +704,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.username == ADMIN_USERNAME:
         ADMIN_CHAT_ID = update.message.chat_id
 
-    # Clean welcome – no ASCII art
     await update.message.reply_text(
         "🔮 *PHANTOM WATCH* – Elite Digital Reconnaissance\n"
         "Identify vulnerabilities, leaked data, and impersonation risks before attackers do.\n\n"
@@ -710,7 +711,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=menu_button,
         parse_mode='Markdown'
     )
-    # Also send the main inline menu
     await update.message.reply_text("⬇️ Main Menu:", reply_markup=main_menu_keyboard(user.username == ADMIN_USERNAME))
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
