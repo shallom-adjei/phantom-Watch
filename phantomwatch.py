@@ -106,34 +106,78 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
 
 def format_summary(domain, results):
     lines = [f"🔍 Scan completed for {domain}\n"]
+    # Nmap
     if 'nmap' in results:
-        ports = len(re.findall(r"^\d+/tcp\s+open\s+", results['nmap'], re.MULTILINE))
-        vulns = len(re.findall(r"\|.*VULNERABLE.*", results['nmap']))
-        lines.append(f"🛡️ Nmap: {ports} open ports, {vulns} potential vulns")
+        ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get('nmap',''), re.MULTILINE))
+        vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get('nmap','')))
+        if ports or vulns:
+            lines.append(f"🛡️ Nmap: {ports} open ports, {vulns} potential vulns")
+        else:
+            lines.append("🛡️ Nmap: No open ports or vulns found.")
+    else:
+        lines.append("🛡️ Nmap: Not run.")
+    # Nikto
     if 'nikto' in results:
-        issues = len(re.findall(r"\+ (.*)", results['nikto']))
-        lines.append(f"🔥 Nikto: {issues} web issues")
+        issues = len(re.findall(r"\+ (.*)", results.get('nikto','')))
+        if issues:
+            lines.append(f"🔥 Nikto: {issues} web issues")
+        else:
+            lines.append("🔥 Nikto: No web issues found.")
+    else:
+        lines.append("🔥 Nikto: Not run.")
+    # WhatWeb
     if 'whatweb' in results:
-        clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
+        clean = re.sub(r'\x1b\[[0-9;]*m', '', results.get('whatweb',''))
         servers = re.findall(r'HTTPServer\[ (.*?) \]', clean)
-        if servers: lines.append(f"🧩 Technology: {servers[0]}")
-    if 'theHarvester' in results and results['theHarvester'] != "No email":
+        if servers:
+            lines.append(f"🧩 Technology: {servers[0]}")
+        else:
+            lines.append("🧩 Technology: No server header detected.")
+    else:
+        lines.append("🧩 Technology: Not run.")
+    # theHarvester
+    if 'theHarvester' in results:
         harvest = results['theHarvester']
-        if "<html" in harvest.lower():
+        if harvest == "No email":
+            lines.append("📧 theHarvester: No email set – skipped.")
+        elif "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-            lines.append(f"📧 Emails leaked: {len(emails)}")
+            if emails:
+                lines.append(f"📧 Emails leaked: {len(emails)}")
+            else:
+                lines.append("📧 theHarvester: No leaked emails found.")
+        else:
+            lines.append("📧 theHarvester: No results.")
+    else:
+        lines.append("📧 theHarvester: Not run.")
+    # dnstwist
     if 'dnstwist' in results:
-        registered = len(re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE))
-        lines.append(f"🕵️ Typosquatting: {registered} domains registered")
-    if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
-        lines.append("📄 Document metadata leaks found")
+        registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get('dnstwist',''), re.MULTILINE))
+        if registered:
+            lines.append(f"🕵️ Typosquatting: {registered} domains registered")
+        else:
+            lines.append("🕵️ Typosquatting: No similar domains registered.")
+    else:
+        lines.append("🕵️ dnstwist: Not run.")
+    # Metagoofil
+    if 'metagoofil' in results:
+        if "No metadata" in results.get('metagoofil',''):
+            lines.append("📄 Metagoofil: No metadata leaks found.")
+        else:
+            lines.append("📄 Document metadata leaks found")
+    else:
+        lines.append("📄 Metagoofil: Not run.")
+    # Sherlock
     if 'sherlock' in results:
-        found = len(re.findall(r"\[\+\] (.*)", results['sherlock']))
-        lines.append(f"👥 Social media: {found} accounts found")
-    lines.append("\n⚠️ This is a summary. Upgrade to Monthly/Enterprise for full PDF reports.")
+        found = len(re.findall(r"\[\+\] (.*)", results.get('sherlock','')))
+        if found:
+            lines.append(f"👥 Social media: {found} accounts found")
+        else:
+            lines.append("👥 Social media: No accounts found.")
+    else:
+        lines.append("👥 Sherlock: Not run.")
+    lines.append("\n⚠️ Upgrade to Monthly/Enterprise for full PDF reports & compliance mapping.")
     return "\n".join(lines)
-
-# ---------- Menus ----------
 def main_menu(admin=False):
     buttons = [
         [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full"),
