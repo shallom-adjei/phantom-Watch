@@ -149,10 +149,10 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
     for tool in tools:
         if tool == "nmap":
             if progress_callback: progress_callback("⚡ Nmap scanning ports & vulns...")
-            results['nmap'] = run_command(f"nmap -sV -T4 --script vuln --top-ports 200 {domain}")
+            results['nmap'] = run_command(f"nmap -sV -T4 -p- --script vuln,exploit,auth,default,discovery,malware {domain}", timeout=300)
         elif tool == "nikto":
             if progress_callback: progress_callback("🕵️ Nikto web server analysis...")
-            results['nikto'] = run_command(f"nikto -h {domain} -T 123bde -maxtime 120s")
+            results['nikto'] = run_command(f"nikto -h {domain} -T 0123456789abcde -maxtime 300s", timeout=300)
         elif tool == "whatweb":
             if progress_callback: progress_callback("🔎 WhatWeb detecting technologies...")
             results['whatweb'] = run_command(f"whatweb {domain}")
@@ -174,7 +174,7 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
         elif tool == "metagoofil":
             if progress_callback: progress_callback("📄 Metagoofil extracting metadata...")
             results['metagoofil'] = run_command(
-                f"cd /home/runner/metagoofil && python3 metagoofil.py -d {domain} -t pdf,doc,xls -l 10 -n 5 -o /tmp/meta_{domain} -f meta_{domain}.html"
+                f"cd /home/runner/metagoofil && python3 metagoofil.py -d {domain} -t pdf,doc,xls -l 20 -n 10 -o /tmp/meta_{domain} -f meta_{domain}.html", timeout=300
             )
             meta_report = f"/tmp/meta_{domain}/meta_{domain}.html"
             if os.path.exists(meta_report):
