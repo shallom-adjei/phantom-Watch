@@ -267,12 +267,15 @@ def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
     pdf = FPDF()
     pdf.add_page()
 
-     # Register DejaVu Sans (Unicode) – prefer local copy
-    font_path = "fonts/DejaVuSans.ttf"
-    if not os.path.exists(font_path):
-        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"  # fallback
-    pdf.add_font("DejaVu", "", font_path, uni=True)
-    pdf.set_font("DejaVu", "", 10)
+         # Register DejaVu Sans (Unicode) – regular and bold
+    regular_path = "fonts/DejaVuSans.ttf"
+    bold_path    = "fonts/DejaVuSans-Bold.ttf"
+    if not os.path.exists(regular_path):
+        regular_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    if not os.path.exists(bold_path):
+        bold_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    pdf.add_font("DejaVu", "", regular_path, uni=True)
+    pdf.add_font("DejaVu", "B", bold_path, uni=True)
 
     pdf.set_font("DejaVu", "B", 16)
     pdf.cell(0, 10, "PHANTOM WATCH Security Report", ln=True, align="C")

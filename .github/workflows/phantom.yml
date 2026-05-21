@@ -19,7 +19,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y nmap nikto whatweb git python3-pip curl fontconfig
+          sudo apt-get install -y nmap nikto whatweb git python3-pip curl
 
       - name: Install Python tools (pip)
         run: |
@@ -27,13 +27,14 @@ jobs:
 
       - name: Install Playwright browsers
         run: |
-          playwright install-deps
+          sudo playwright install-deps
           playwright install chromium
 
-            - name: Download DejaVu Sans font for PDF (local)
-              run: |
+            - name: Download DejaVu Sans fonts (regular + bold) locally
+        run: |
           mkdir -p fonts
-          wget -qO fonts/DejaVuSans.ttf https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf
+          wget -q -O fonts/DejaVuSans.ttf https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf
+          wget -q -O fonts/DejaVuSans-Bold.ttf https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf
 
       - name: Clone metagoofil
         run: git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
