@@ -266,8 +266,9 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
 def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
     pdf = FPDF()
     pdf.add_page()
-    # Register DejaVu Sans (Unicode)
-    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
+     # Register DejaVu Sans (Unicode) – prefer local copy
+    font_path = "fonts/DejaVuSans.ttf"
     if not os.path.exists(font_path):
         font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"  # fallback
     pdf.add_font("DejaVu", "", font_path, uni=True)

@@ -30,11 +30,10 @@ jobs:
           playwright install-deps
           playwright install chromium
 
-      - name: Download DejaVu Sans font for PDF
-        run: |
-          mkdir -p /usr/share/fonts/truetype/dejavu
-          wget -qO /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf
-          fc-cache -f
+            - name: Download DejaVu Sans font for PDF (local)
+              run: |
+          mkdir -p fonts
+          wget -qO fonts/DejaVuSans.ttf https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf
 
       - name: Clone metagoofil
         run: git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
