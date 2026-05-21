@@ -266,11 +266,9 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
 def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
     pdf = FPDF()
     pdf.add_page()
-
-         # Register DejaVu Sans (Unicode) – regular and bold
-        regular_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-    if not os.path.exists(bold_path):
-        bold_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    # DejaVu fonts (system-installed via apt)
+    regular_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    bold_path    = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
     pdf.add_font("DejaVu", "", regular_path, uni=True)
     pdf.add_font("DejaVu", "B", bold_path, uni=True)
 
@@ -348,7 +346,6 @@ def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
     pdf.output(buf)
     buf.seek(0)
     return buf
-
 # ---------- Brief Inline Summary (all tools) ----------
 def brief_summary(domain: str, results: dict) -> str:
     lines = [f"🔍 *Scan completed for {domain}*\n"]
