@@ -11,7 +11,7 @@ SCAN_TIMEOUT = 150
 
 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS clients (username TEXT PRIMARY KEY, plan TEXT DEFAULT 'free', expiry TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS clients (username TEXT PRIMARY KEY, plan TEXT DEFAULT 'free', expiry TEXT, email_collect TEXT DEFAULT '')''')
 c.execute('''CREATE TABLE IF NOT EXISTS verification (username TEXT, domain TEXT, token TEXT, PRIMARY KEY(username, domain))''')
 conn.commit()
 
