@@ -323,46 +323,67 @@ def format_report(domain: str, results: dict) -> str:
 # ==================== TOOL HELP TEXT ====================
 TOOL_HELP = {
     "nmap": (
-        "⚡ Nmap (Network Mapper)\n"
-        "Scans for open ports, running services, OS detection, and known vulnerabilities.\n"
-        "Used by hackers to find entry points like outdated SSH, RDP, or vulnerable web servers.\n"
-        "Protection: Close unnecessary ports, use a firewall, keep services updated, and hide version banners."
+        "*⚡ Nmap (Network Mapper)*
+"
+        "Scans for open ports, running services, OS detection, and known vulnerabilities.
+"
+        "Used by hackers to find entry points like outdated SSH, RDP, or vulnerable web servers.
+"
+        "*Protection:* Close unnecessary ports, use a firewall, keep services updated, and hide version banners."
     ),
     "nikto": (
-        "🕵️ Nikto\n"
-        "Scans web servers for dangerous files, misconfigurations, outdated software, and insecure headers.\n"
-        "Attackers exploit these to inject code, deface sites, or steal data.\n"
-        "Protection: Regularly update CMS/plugins, add security headers (CSP, X-Frame-Options), and remove default files."
+        "*🕵️ Nikto*
+"
+        "Scans web servers for dangerous files, misconfigurations, outdated software, and insecure headers.
+"
+        "Attackers exploit these to inject code, deface sites, or steal data.
+"
+        "*Protection:* Regularly update CMS/plugins, add security headers (CSP, X-Frame-Options), and remove default files."
     ),
     "whatweb": (
-        "🔎 WhatWeb\n"
-        "Identifies technologies used on a website (CMS, frameworks, analytics, CDN, etc.).\n"
-        "Hackers fingerprint the stack to launch targeted attacks against known vulnerabilities.\n"
-        "Protection: Mask technology signatures (e.g., modify headers), keep all components patched, and use a WAF."
+        "*🔎 WhatWeb*
+"
+        "Identifies technologies used on a website (CMS, frameworks, analytics, CDN, etc.).
+"
+        "Hackers fingerprint the stack to launch targeted attacks against known vulnerabilities.
+"
+        "*Protection:* Mask technology signatures (e.g., modify headers), keep all components patched, and use a WAF."
     ),
     "theHarvester": (
-        "📧 theHarvester\n"
-        "Gathers emails, subdomains, IPs, and other OSINT from public sources.\n"
-        "Threat actors use this for phishing campaigns, credential stuffing, and social engineering.\n"
-        "Protection: Implement DMARC/SPF/DKIM, use generic contact forms, and train staff to recognise phishing."
+        "*📧 theHarvester*
+"
+        "Gathers emails, subdomains, IPs, and other OSINT from public sources.
+"
+        "Threat actors use this for phishing campaigns, credential stuffing, and social engineering.
+"
+        "*Protection:* Implement DMARC/SPF/DKIM, use generic contact forms, and train staff to recognise phishing."
     ),
     "dnstwist": (
-        "🔄 dnstwist\n"
-        "Detects typosquatting domains (e.g., googlle.com) that could be used to impersonate your brand.\n"
-        "Phishers register look‑alike domains to steal customer credentials.\n"
-        "Protection: Monitor domain registrations, purchase similar domains, and report fraudulent ones to the registrar."
+        "*🔄 dnstwist*
+"
+        "Detects typosquatting domains (e.g., googlle.com) that could be used to impersonate your brand.
+"
+        "Phishers register look‑alike domains to steal customer credentials.
+"
+        "*Protection:* Monitor domain registrations, purchase similar domains, and report fraudulent ones to the registrar."
     ),
     "metagoofil": (
-        "📄 Metagoofil\n"
-        "Extracts metadata from public documents (PDF, DOC, XLS) to find usernames, software versions, and paths.\n"
-        "This info helps attackers craft precise social engineering attacks or exploit internal software.\n"
-        "Protection: Strip metadata before publishing, avoid including internal paths or personal names in public files."
+        "*📄 Metagoofil*
+"
+        "Extracts metadata from public documents (PDF, DOC, XLS) to find usernames, software versions, and paths.
+"
+        "This info helps attackers craft precise social engineering attacks or exploit internal software.
+"
+        "*Protection:* Strip metadata before publishing, avoid including internal paths or personal names in public files."
     ),
     "sherlock": (
-        "👤 Sherlock\n"
-        "Checks if a username is registered on various social media platforms.\n"
-        "Hackers use this to impersonate brands, gather intelligence, or launch targeted phishing via social channels.\n"
-        "Protection: Secure social accounts with 2FA, review privacy settings, and remove unused profiles."
+        "*👤 Sherlock*
+"
+        "Checks if a username is registered on various social media platforms.
+"
+        "Hackers use this to impersonate brands, gather intelligence, or launch targeted phishing via social channels.
+"
+        "*Protection:* Secure social accounts with 2FA, review privacy settings, and remove unused profiles."
     ),
 }
 
@@ -378,6 +399,7 @@ def main_menu_keyboard(user_is_admin=False):
         [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full")],
         [InlineKeyboardButton("⚡ Quick Scan", callback_data="scan_quick")],
         [InlineKeyboardButton("📧 Set Email", callback_data="set_email")],
+        [InlineKeyboardButton("📖 How It Works", callback_data="how_it_works")],
         [InlineKeyboardButton("❓ Help", callback_data="help")],
     ]
     if user_is_admin:
