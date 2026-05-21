@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Phantom Watch – Professional Threat Intelligence Platform
-Final Resilient Version – State persistence, auto‑recovery, zero silent crashes.
+Final Resilient Version – All features included, no missing functions.
 """
 
 import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio, io, traceback
@@ -136,7 +136,7 @@ async def notify_admin(text: str, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-# ---------- Breach Check (same) ----------
+# ---------- Breach Check ----------
 async def check_breach(email: str, context, chat_id):
     try:
         resp = requests.get(f"https://api.xposedornot.com/v1/breach-analytics?email={email}", timeout=15)
@@ -195,14 +195,12 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
     if tools is None:
         tools = ["nmap", "nikto", "whatweb", "theHarvester", "dnstwist", "metagoofil", "sherlock", "dalfox"]
     results = {}
-    # Start a new scan record
     c.execute("INSERT INTO scan_results (username, domain, timestamp, report, finished) VALUES (?,?,?,?,?)",
               (username, domain, datetime.now().isoformat(), "{}", 0))
     scan_id = c.lastrowid
     conn.commit()
 
     def save_progress():
-        nonlocal results
         c.execute("UPDATE scan_results SET report=?, finished=? WHERE id=?",
                   (json.dumps(results), 0, scan_id))
         conn.commit()
@@ -260,7 +258,6 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
             print(f"[!] Tool {tool} failed: {e}")
             continue
 
-    # Finalize
     c.execute("UPDATE scan_results SET report=?, finished=? WHERE id=?",
               (json.dumps(results), 1, scan_id))
     conn.commit()
@@ -366,7 +363,7 @@ def brief_summary(domain: str, results: dict) -> str:
     lines.append("\n📎 Detailed PDF report attached.")
     return "\n".join(lines)
 
-# ----- Menus (unchanged) -----
+# ----- Menus -----
 def main_menu_keyboard(user_is_admin=False):
     buttons = [
         [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full"),
@@ -413,7 +410,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data == "check_breaches":
         if not is_subscription_active(username):
-            await query.edit_message_text("⛔ Subscription expired contact admin @StewieCyfer."); return
+            await query.edit_message_text("⛔ Subscription expired."); return
         c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
         row = c.fetchone()
         email = row[0] if row else ""
@@ -520,7 +517,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(msg, reply_markup=admin_menu_keyboard())
         return
 
-# ----- Message handler (with auto‑recovery) -----
+# ----- Message handler (with all states) -----
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     username = user.username
@@ -531,9 +528,105 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
-    # ... (admin wizards, set email, subscribe, github scan – identical to previous script; omitted for brevity, but they are present in the full paste)
+    # ----- ADMIN ADD USER -----
+    if state == "ADDUSER_USERNAME":
+        if username != ADMIN_USERNAME:
+            await update.message.reply_text("❌ Admin only."); return
+        target = text.lstrip('@')
+        if not target:
+            await update.message.reply_text("Invalid. Enter username with @:"); return
+        context.user_data['add_target'] = target
+        await update.message.reply_text("Plan? (free, monthly, enterprise):")
+        context.user_data['state'] = "ADDUSER_PLAN"
+        return
+    if state == "ADDUSER_PLAN":
+        plan = text.lower()
+        if plan not in ["free", "monthly", "enterprise"]:
+            await update.message.reply_text("Invalid plan."); return
+        context.user_data['add_plan'] = plan
+        await update.message.reply_text("How many months? (0 for free trial):")
+        context.user_data['state'] = "ADDUSER_MONTHS"
+        return
+    if state == "ADDUSER_MONTHS":
+        try: months = int(text)
+        except: await update.message.reply_text("Enter a number."); return
+        target = context.user_data['add_target']
+        plan = context.user_data['add_plan']
+        add_client(target, plan)
+        if plan == "free": set_free_expiry(target)
+        elif months > 0: set_plan(target, plan, months)
+        await update.message.reply_text(f"✅ Added @{target} with {plan} plan.", reply_markup=admin_menu_keyboard())
+        for k in ('add_target', 'add_plan', 'state'): context.user_data.pop(k, None)
+        return
 
-    # ----- SCAN DOMAIN with state recovery -----
+    # ----- ADMIN VERIFY DOMAIN -----
+    if state == "VERIFY_USERNAME":
+        if username != ADMIN_USERNAME:
+            await update.message.reply_text("❌ Admin only."); return
+        target = text.lstrip('@')
+        if not is_client(target):
+            await update.message.reply_text("User not a client."); return
+        context.user_data['verify_target'] = target
+        await update.message.reply_text("Domain to verify:")
+        context.user_data['state'] = "VERIFY_DOMAIN"
+        return
+    if state == "VERIFY_DOMAIN":
+        target = context.user_data['verify_target']
+        domain = text.lower()
+        c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (target, domain, "admin_verified"))
+        conn.commit()
+        await update.message.reply_text(f"✅ Domain {domain} verified for @{target}.", reply_markup=admin_menu_keyboard())
+        for k in ('verify_target', 'state'): context.user_data.pop(k, None)
+        return
+
+    # ----- SET EMAIL -----
+    if state == "SET_EMAIL":
+        if '@' not in text: await update.message.reply_text("Invalid email."); return
+        c.execute("UPDATE clients SET email_collect=? WHERE username=?", (text, username))
+        conn.commit()
+        await update.message.reply_text(f"✅ Email set.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        context.user_data.pop('state', None)
+        return
+
+    # ----- SUBSCRIBE DOMAIN -----
+    if state == "SUBSCRIBE_DOMAIN":
+        domain = text.lower()
+        if not re.match(r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$', domain):
+            await update.message.reply_text("Invalid domain."); return
+        c.execute("INSERT OR REPLACE INTO subscriptions VALUES (?,?,?,?)",
+                  (username, domain, datetime.now().isoformat(), "{}"))
+        conn.commit()
+        await update.message.reply_text(f"✅ Subscribed.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        context.user_data.pop('state', None)
+        return
+
+    # ----- GITHUB SECRET SCAN -----
+    if state == "GITHUB_SCAN":
+        repo_url = text.strip()
+        if not repo_url.startswith("https://github.com/"):
+            await update.message.reply_text("Invalid GitHub URL."); return
+        await update.message.reply_text("🔑 Scanning for secrets...")
+        try:
+            repo_name = repo_url.rstrip("/").split("/")[-1]
+            clone_dir = f"/tmp/{repo_name}_{random.randint(1000,9999)}"
+            subprocess.run(["git", "clone", "--depth=1", repo_url, clone_dir], check=True, timeout=30)
+            result = subprocess.run(["trufflehog", "filesystem", clone_dir, "--no-update", "--json"],
+                                    capture_output=True, text=True, timeout=120)
+            shutil.rmtree(clone_dir, ignore_errors=True)
+            findings = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+            if not findings:
+                await update.message.reply_text("✅ No secrets detected.")
+            else:
+                summary = f"🔑 *Found {len(findings)} secrets!*\n"
+                for f in findings[:5]:
+                    summary += f"• {f.get('DetectorName','Unknown')} in {f.get('SourceMetadata',{}).get('Data',{}).get('Filesystem',{}).get('file','unknown')}\n"
+                await update.message.reply_text(summary, parse_mode='Markdown')
+        except Exception as e:
+            await update.message.reply_text(f"❌ GitHub scan failed: {e}")
+        context.user_data.pop('state', None)
+        return
+
+    # ----- SCAN DOMAIN (with recovery) -----
     if state == "SCAN_DOMAIN":
         domain = text.lower()
         if not re.match(r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$', domain):
@@ -542,7 +635,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⛔ Subscription expired."); return
 
         plan = get_client_plan(username)
-        # Verification (same)
         if username != ADMIN_USERNAME:
             c.execute("SELECT token FROM verification WHERE username=? AND domain=?", (username, domain))
             row = c.fetchone()
@@ -557,12 +649,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"🔐 Verify ownership: upload `verify.txt` with token `{token}` to root of your site.\nOr ask admin for manual verification.")
                 return
 
-        # --- Check for previous unfinished scan ---
+        # Check for previous finished scan
         c.execute("SELECT id, report, finished FROM scan_results WHERE username=? AND domain=? AND finished=1 ORDER BY id DESC LIMIT 1",
                   (username, domain))
         prev = c.fetchone()
         if prev:
-            # Send previous report immediately
             old_results = json.loads(prev[1])
             summary = brief_summary(domain, old_results)
             await update.message.reply_text(summary, parse_mode='Markdown')
@@ -575,11 +666,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text(f"⚠️ PDF generation failed: {e}")
             return
 
-        # --- Launch new scan ---
+        # New scan
         await update.message.reply_text("✅ Domain verified. Launching scan...")
         chat_id = update.message.chat_id
 
-        # Animated progress
         stop_anim = asyncio.Event()
         async def anim():
             frames = ["[▓░░░░]","[▓▓░░░]","[▓▓▓░░]","[▓▓▓▓░]","[▓▓▓▓▓]"]
@@ -641,7 +731,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await context.bot.send_message(chat_id=chat_id, text="❌ No results (scan failed).")
 
-        # Mark scan as finished (already done inside run_scan)
         context.user_data.pop('state', None)
         context.user_data.pop('scan_type', None)
         context.user_data.pop('tools', None)
@@ -651,17 +740,44 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Fallback
     await update.message.reply_text("I didn't understand. Use the buttons.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
 
-# ... (remaining: admin wizards, set email, subscribe, github scan – included in full paste)
+# ----- CVE Monitor -----
+async def cve_monitor_task(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        resp = requests.get(
+            "https://services.nvd.nist.gov/rest/json/cves/2.0?pubStartDate=" +
+            (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.000") +
+            "&resultsPerPage=50", timeout=30)
+        if resp.status_code == 200:
+            cves = resp.json().get("vulnerabilities", [])
+            c.execute("SELECT username, domain, tech FROM client_tech")
+            rows = c.fetchall()
+            for username, domain, tech in rows:
+                for vuln in cves:
+                    desc = vuln.get("cve", {}).get("descriptions", [{}])[0].get("value", "")
+                    if tech.lower() in desc.lower():
+                        cve_id = vuln["cve"]["id"]
+                        try:
+                            await context.bot.send_message(
+                                chat_id=f"@{username}",
+                                text=f"🚨 *Zero‑day alert for {domain}*\nCVE-{cve_id} affects {tech}\nPatch immediately!",
+                                parse_mode='Markdown')
+                        except: pass
+    except Exception as e:
+        print(f"[!] CVE monitor error: {e}")
 
+# ----- Start command -----
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global ADMIN_CHAT_ID
     user = update.message.from_user
     if user.username == ADMIN_USERNAME:
         ADMIN_CHAT_ID = update.message.chat_id
-    await update.message.reply_text("🔮 *PHANTOM WATCH* – Elite Digital Reconnaissance\n..."
-                                    "Identify vulnerabilities, leaked data, and impersonation risks before attackers do.\n\n"
-                                    "Use the inline buttons below, or tap *🛡️ Menu* next to the text input at any time.",
-                                    reply_markup=menu_button, parse_mode='Markdown')
+    await update.message.reply_text(
+        "🔮 *PHANTOM WATCH* – Elite Digital Reconnaissance\n"
+        "Identify vulnerabilities, leaked data, and impersonation risks before attackers do.\n\n"
+        "Use the inline buttons below, or tap *🛡️ Menu* next to the text input at any time.",
+        reply_markup=menu_button,
+        parse_mode='Markdown'
+    )
     await update.message.reply_text("⬇️ Main Menu:", reply_markup=main_menu_keyboard(user.username == ADMIN_USERNAME))
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -671,6 +787,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     else:
         print(f"[!] Unhandled error: {err}")
 
+# ----- Main -----
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
