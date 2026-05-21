@@ -142,8 +142,7 @@ async def check_breach(email: str, context: ContextTypes.DEFAULT_TYPE, chat_id: 
             breach_details = data.get("breach_details", {})
             if breach_details:
                 total = len(breach_details)
-                lines = [f"🩸 *Breach Report for {email}*", f"Found in *{total}* known breaches:
-"]
+                lines = [f"🩸 *Breach Report for {email}*", f"Found in *{total}* known breaches:\n"]
                 for name, info in list(breach_details.items())[:10]:
                     domain = info.get("domain", "unknown")
                     date = info.get("breach_date", "N/A")
@@ -152,8 +151,7 @@ async def check_breach(email: str, context: ContextTypes.DEFAULT_TYPE, chat_id: 
                     lines.append(f"… and {total-10} more breaches.")
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text="
-".join(lines),
+                    text="\n".join(lines),
                     parse_mode='Markdown'
                 )
                 return
@@ -175,10 +173,7 @@ async def check_breach(email: str, context: ContextTypes.DEFAULT_TYPE, chat_id: 
                 names = [b["Name"] for b in breaches]
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"🩸 *HIBP Report for {email}*
-Found in *{len(names)}* breaches:
-• " + "
-• ".join(names[:10]),
+                    text=f"🩸 *HIBP Report for {email}*\nFound in *{len(names)}* breaches:\n• " + "\n• ".join(names[:10]),
                     parse_mode='Markdown'
                 )
                 return
@@ -187,8 +182,6 @@ Found in *{len(names)}* breaches:
 
     # ---- Nothing found ----
     await context.bot.send_message(chat_id=chat_id, text="✅ No breaches found for this email.")
-
-# ---------- Animated Progress & Instant Findings ----------
 async def send_animation(chat_id, context, stop_event, progress_callback=None):
     frames = ["[▓░░░░░░░░] 10%", "[▓▓░░░░░░░] 20%", "[▓▓▓░░░░░░] 30%", "[▓▓▓▓░░░░░] 40%",
               "[▓▓▓▓▓░░░░] 50%", "[▓▓▓▓▓▓░░░] 60%", "[▓▓▓▓▓▓▓░░] 70%", "[▓▓▓▓▓▓▓▓░] 80%",
