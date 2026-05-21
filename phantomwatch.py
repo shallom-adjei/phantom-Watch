@@ -694,6 +694,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_subscription_active(username):
             await update.message.reply_text("⛔ You are not an authorized client. Tap /start and choose *📩 Contact Admin* to request access.",
                                 parse_mode='Markdown')
+            return
         plan = get_client_plan(username)
         if username != ADMIN_USERNAME:
             c.execute("SELECT token FROM verification WHERE username=? AND domain=?", (username, domain))
@@ -776,9 +777,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try: await progress_msg.delete()
             except: pass
 
+        print(f"[DEBUG] Scan finished, sending report for {domain}")
         if results:
-            summary = brief_summary(domain, results)
-            await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode='Markdown')
+            try:
+                summary = brief_summary(domain, results)
+                await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode='Markdown')
+            except Exception as e:
+                print(f"[!] Failed to send summary: {e}")
+                await update.message.reply_text("⚠️ Summary generation failed, but detailed report is ready.")
             if plan == "enterprise" and 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
                 await capture_exploit_screenshot(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
             if plan in ("monthly", "enterprise"):
