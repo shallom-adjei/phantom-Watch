@@ -341,42 +341,74 @@ def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
     return buf
 
 def brief_summary(domain: str, results: dict) -> str:
+    """Safe summary generator – never crashes on missing data."""
     lines = [f"🔍 *Scan completed for {domain}*\n"]
-    if 'nmap' in results:
-        vulns = len(re.findall(r"\|.*VULNERABLE.*", results['nmap']))
-        ports = len(re.findall(r"^\d+/tcp\s+open\s+", results['nmap'], re.MULTILINE))
-        lines.append(f"🛡️ Nmap: {ports} open ports, {vulns} potential vulns")
-    if 'nikto' in results:
-        issues = len(re.findall(r"\+ (.*)", results['nikto']))
-        lines.append(f"🔥 Nikto: {issues} web issues")
-    if 'whatweb' in results:
-        clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
-        if 'HTTPServer' in clean:
-            server = re.findall(r'HTTPServer\[ (.*?) \]', clean)[0]
-            lines.append(f"🧩 Technology: {server}")
-        if 'Cloudflare' in clean:
-            lines.append("🛡️ Cloudflare WAF present")
-    if 'theHarvester' in results and results['theHarvester'] != "No email provided for OSINT.":
-        harvest = results['theHarvester']
-        if "<html" in harvest.lower():
-            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-            lines.append(f"📧 Emails leaked: {len(emails)}")
-    if 'dnstwist' in results:
-        registered = len(re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE))
-        lines.append(f"🕵️ Typosquatting: {registered} domains registered")
-    if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
-        lines.append("📄 Document metadata leaks found")
-    if 'sherlock' in results:
-        found = len(re.findall(r"\[\+\] (.*)", results['sherlock']))
-        lines.append(f"👥 Social media: {found} accounts found")
-    if 'dalfox' in results:
-        if "vulnerable" in results['dalfox'].lower():
-            lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
-        else:
-            lines.append("🦠 Dalfox: no XSS found")
+    # Nmap
+    try:
+        if 'nmap' in results:
+            vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get('nmap','')))
+            ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get('nmap',''), re.MULTILINE))
+            lines.append(f"🛡️ Nmap: {ports} open ports, {vulns} potential vulns")
+    except:
+        pass
+    # Nikto
+    try:
+        if 'nikto' in results:
+            issues = len(re.findall(r"\+ (.*)", results.get('nikto','')))
+            lines.append(f"🔥 Nikto: {issues} web issues")
+    except:
+        pass
+    # WhatWeb
+    try:
+        if 'whatweb' in results:
+            clean = re.sub(r'\x1b\[[0-9;]*m', '', results.get('whatweb',''))
+            servers = re.findall(r'HTTPServer\[ (.*?) \]', clean)
+            if servers:
+                lines.append(f"🧩 Technology: {servers[0]}")
+            if 'Cloudflare' in clean:
+                lines.append("🛡️ Cloudflare WAF present")
+    except:
+        pass
+    # theHarvester
+    try:
+        if 'theHarvester' in results and results.get('theHarvester','') != "No email provided for OSINT.":
+            harvest = results['theHarvester']
+            if "<html" in harvest.lower():
+                emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
+                lines.append(f"📧 Emails leaked: {len(emails)}")
+    except:
+        pass
+    # dnstwist
+    try:
+        if 'dnstwist' in results:
+            registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get('dnstwist',''), re.MULTILINE))
+            lines.append(f"🕵️ Typosquatting: {registered} domains registered")
+    except:
+        pass
+    # Metagoofil
+    try:
+        if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
+            lines.append("📄 Document metadata leaks found")
+    except:
+        pass
+    # Sherlock
+    try:
+        if 'sherlock' in results:
+            found = len(re.findall(r"\[\+\] (.*)", results.get('sherlock','')))
+            lines.append(f"👥 Social media: {found} accounts found")
+    except:
+        pass
+    # Dalfox
+    try:
+        if 'dalfox' in results:
+            if "vulnerable" in results.get('dalfox','').lower():
+                lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
+            else:
+                lines.append("🦠 Dalfox: no XSS found")
+    except:
+        pass
     lines.append("\n📎 Detailed PDF report attached.")
     return "\n".join(lines)
-
 # ----- Menus -----
 def main_menu_keyboard(user_is_admin=False):
     buttons = [
