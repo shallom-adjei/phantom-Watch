@@ -4,7 +4,7 @@ Phantom Watch – Professional Threat Intelligence Platform
 Final Resilient Version – All features included, no missing functions.
 """
 
-import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio, io, traceback
+import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio, io, traceback, threading
 from datetime import datetime, timedelta
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
@@ -42,41 +42,48 @@ COMPLIANCE = {
 
 # Database
 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+db_lock = threading.Lock()
+
+def safe_execute(query, *params):
+    global db_lock
+    with db_lock:
+        return safe_execute(query, params) if params else safe_execute(query)
+
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS clients (
+safe_execute('''CREATE TABLE IF NOT EXISTS clients (
     username TEXT PRIMARY KEY,
     plan TEXT DEFAULT 'free',
     expiry TEXT,
     email_collect TEXT DEFAULT ''
 )''')
-c.execute('''CREATE TABLE IF NOT EXISTS verification (
+safe_execute('''CREATE TABLE IF NOT EXISTS verification (
     username TEXT, domain TEXT, token TEXT,
     PRIMARY KEY(username, domain)
 )''')
-c.execute('''CREATE TABLE IF NOT EXISTS scan_results (
+safe_execute('''CREATE TABLE IF NOT EXISTS scan_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT, domain TEXT, timestamp TEXT,
     report TEXT, finished INTEGER DEFAULT 0
 )''')
-c.execute('''CREATE TABLE IF NOT EXISTS subscriptions (
+safe_execute('''CREATE TABLE IF NOT EXISTS subscriptions (
     username TEXT, domain TEXT,
     last_scan_time TEXT, last_report_json TEXT,
     PRIMARY KEY(username, domain)
 )''')
-c.execute('''CREATE TABLE IF NOT EXISTS client_tech (
+safe_execute('''CREATE TABLE IF NOT EXISTS client_tech (
     username TEXT, domain TEXT, tech TEXT,
     last_check TEXT,
     PRIMARY KEY(username, domain, tech)
 )''')
-conn.commit()
+with db_lock: conn.commit()
 
 # ----- Helpers -----
 def is_client(username: str) -> bool:
-    c.execute("SELECT 1 FROM clients WHERE username=?", (username,))
+    safe_execute("SELECT 1 FROM clients WHERE username=?", (username,))
     return c.fetchone() is not None
 
 def is_subscription_active(username: str) -> bool:
-    c.execute("SELECT plan, expiry FROM clients WHERE username=?", (username,))
+    safe_execute("SELECT plan, expiry FROM clients WHERE username=?", (username,))
     row = c.fetchone()
     if not row:
         return False
@@ -90,23 +97,23 @@ def is_subscription_active(username: str) -> bool:
     return True
 
 def get_client_plan(username: str) -> str:
-    c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+    safe_execute("SELECT plan FROM clients WHERE username=?", (username,))
     row = c.fetchone()
     return row[0] if row else "free"
 
 def add_client(username: str, plan: str = "free", expiry: str = ""):
-    c.execute("INSERT OR REPLACE INTO clients VALUES (?,?,?,?)", (username, plan, expiry, ""))
-    conn.commit()
+    safe_execute("INSERT OR REPLACE INTO clients VALUES (?,?,?,?)", (username, plan, expiry, ""))
+    with db_lock: conn.commit()
 
 def set_plan(username: str, plan: str, months: int):
     new_expiry = (datetime.now() + timedelta(days=30*months)).strftime("%Y-%m-%d")
-    c.execute("UPDATE clients SET plan=?, expiry=? WHERE username=?", (plan, new_expiry, username))
-    conn.commit()
+    safe_execute("UPDATE clients SET plan=?, expiry=? WHERE username=?", (plan, new_expiry, username))
+    with db_lock: conn.commit()
 
 def set_free_expiry(username: str):
     new_expiry = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-    c.execute("UPDATE clients SET expiry=? WHERE username=?", (new_expiry, username))
-    conn.commit()
+    safe_execute("UPDATE clients SET expiry=? WHERE username=?", (new_expiry, username))
+    with db_lock: conn.commit()
 
 def generate_token() -> str:
     return ''.join(random.choices(string.ascii_letters + string.digits, k=20))
@@ -202,15 +209,15 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
     if tools is None:
         tools = ["nmap", "nikto", "whatweb", "theHarvester", "dnstwist", "metagoofil", "sherlock", "dalfox"]
     results = {}
-    c.execute("INSERT INTO scan_results (username, domain, timestamp, report, finished) VALUES (?,?,?,?,?)",
+    safe_execute("INSERT INTO scan_results (username, domain, timestamp, report, finished) VALUES (?,?,?,?,?)",
               (username, domain, datetime.now().isoformat(), "{}", 0))
     scan_id = c.lastrowid
-    conn.commit()
+    with db_lock: conn.commit()
 
     def save_progress():
-        c.execute("UPDATE scan_results SET report=?, finished=? WHERE id=?",
+        safe_execute("UPDATE scan_results SET report=?, finished=? WHERE id=?",
                   (json.dumps(results), 0, scan_id))
-        conn.commit()
+        with db_lock: conn.commit()
 
     for tool in tools:
         try:
@@ -265,9 +272,9 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
             print(f"[!] Tool {tool} failed: {e}")
             continue
 
-    c.execute("UPDATE scan_results SET report=?, finished=? WHERE id=?",
+    safe_execute("UPDATE scan_results SET report=?, finished=? WHERE id=?",
               (json.dumps(results), 1, scan_id))
-    conn.commit()
+    with db_lock: conn.commit()
     return results
 
 # ---------- PDF Generator ----------
@@ -419,7 +426,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "check_breaches":
         if not is_subscription_active(username):
             await query.edit_message_text("⛔ Subscription expired."); return
-        c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
+        safe_execute("SELECT email_collect FROM clients WHERE username=?", (username,))
         row = c.fetchone()
         email = row[0] if row else ""
         if not email:
@@ -547,7 +554,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data == "admin_status":
         if username != ADMIN_USERNAME: return
-        c.execute("SELECT username, plan, expiry FROM clients")
+        safe_execute("SELECT username, plan, expiry FROM clients")
         clients = c.fetchall()
         msg = "📊 Client List\n\n"
         for u, p, e in clients:
@@ -612,8 +619,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("User is not a client.")
             return
         # Set expiry to yesterday → instantly inactive
-        c.execute("UPDATE clients SET expiry='2000-01-01' WHERE username=?", (target,))
-        conn.commit()
+        safe_execute("UPDATE clients SET expiry='2000-01-01' WHERE username=?", (target,))
+        with db_lock: conn.commit()
         await update.message.reply_text(f"❌ User @{target} has been removed. They can no longer use the bot.",
                                         reply_markup=admin_menu_keyboard())
         context.user_data.pop('state', None)
@@ -633,8 +640,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if state == "VERIFY_DOMAIN":
         target = context.user_data['verify_target']
         domain = text.lower()
-        c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (target, domain, "admin_verified"))
-        conn.commit()
+        safe_execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (target, domain, "admin_verified"))
+        with db_lock: conn.commit()
         await update.message.reply_text(f"✅ Domain {domain} verified for @{target}.", reply_markup=admin_menu_keyboard())
         for k in ('verify_target', 'state'): context.user_data.pop(k, None)
         return
@@ -642,8 +649,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ----- SET EMAIL -----
     if state == "SET_EMAIL":
         if '@' not in text: await update.message.reply_text("Invalid email."); return
-        c.execute("UPDATE clients SET email_collect=? WHERE username=?", (text, username))
-        conn.commit()
+        safe_execute("UPDATE clients SET email_collect=? WHERE username=?", (text, username))
+        with db_lock: conn.commit()
         await update.message.reply_text(f"✅ Email set.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         context.user_data.pop('state', None)
         return
@@ -653,9 +660,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         domain = text.lower()
         if not re.match(r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$', domain):
             await update.message.reply_text("Invalid domain."); return
-        c.execute("INSERT OR REPLACE INTO subscriptions VALUES (?,?,?,?)",
+        safe_execute("INSERT OR REPLACE INTO subscriptions VALUES (?,?,?,?)",
                   (username, domain, datetime.now().isoformat(), "{}"))
-        conn.commit()
+        with db_lock: conn.commit()
         await update.message.reply_text(f"✅ Subscribed.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         context.user_data.pop('state', None)
         return
@@ -697,7 +704,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         plan = get_client_plan(username)
         if username != ADMIN_USERNAME:
-            c.execute("SELECT token FROM verification WHERE username=? AND domain=?", (username, domain))
+            safe_execute("SELECT token FROM verification WHERE username=? AND domain=?", (username, domain))
             row = c.fetchone()
             if row and row[0] == "admin_verified": pass
             elif row and row[0] != "admin_verified":
@@ -705,13 +712,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text("⏳ Verification file missing."); return
             else:
                 token = generate_token()
-                c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (username, domain, token))
-                conn.commit()
+                safe_execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (username, domain, token))
+                with db_lock: conn.commit()
                 await update.message.reply_text(f"🔐 Verify ownership: upload `verify.txt` with token `{token}` to root of your site.\nOr ask admin for manual verification.")
                 return
 
         # Check for previous finished scan
-        c.execute("SELECT id, report, finished FROM scan_results WHERE username=? AND domain=? AND finished=1 ORDER BY id DESC LIMIT 1",
+        safe_execute("SELECT id, report, finished FROM scan_results WHERE username=? AND domain=? AND finished=1 ORDER BY id DESC LIMIT 1",
                   (username, domain))
         prev = c.fetchone()
         if prev:
@@ -758,7 +765,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         def instant_callback(msg):
             asyncio.run_coroutine_threadsafe(instant_alert(msg), loop)
 
-        c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
+        safe_execute("SELECT email_collect FROM clients WHERE username=?", (username,))
         row = c.fetchone()
         email = row[0] if row else ""
         tools = context.user_data.get('tools', None)
@@ -815,7 +822,7 @@ async def cve_monitor_task(context: ContextTypes.DEFAULT_TYPE):
             "&resultsPerPage=50", timeout=30)
         if resp.status_code == 200:
             cves = resp.json().get("vulnerabilities", [])
-            c.execute("SELECT username, domain, tech FROM client_tech")
+            safe_execute("SELECT username, domain, tech FROM client_tech")
             rows = c.fetchall()
             for username, domain, tech in rows:
                 for vuln in cves:
@@ -865,21 +872,21 @@ def main():
     jq.run_repeating(cve_monitor_task, interval=3600, first=10)
 
     async def check_subs():
-        c.execute("SELECT username, domain, last_scan_time, last_report_json FROM subscriptions")
+        safe_execute("SELECT username, domain, last_scan_time, last_report_json FROM subscriptions")
         subs = c.fetchall()
         for username, domain, last_time, last_json in subs:
             last_dt = datetime.fromisoformat(last_time) if last_time else datetime.min
             if (datetime.now() - last_dt).days >= 7:
-                c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
+                safe_execute("SELECT email_collect FROM clients WHERE username=?", (username,))
                 row = c.fetchone()
                 email = row[0] if row else ""
                 results = run_scan(domain, email, tools=None, username=username)
                 report = brief_summary(domain, results)
                 try: await app.bot.send_message(chat_id=f"@{username}", text=report, parse_mode='Markdown')
                 except: pass
-                c.execute("UPDATE subscriptions SET last_scan_time=?, last_report_json=? WHERE username=? AND domain=?",
+                safe_execute("UPDATE subscriptions SET last_scan_time=?, last_report_json=? WHERE username=? AND domain=?",
                           (datetime.now().isoformat(), json.dumps(results), username, domain))
-                conn.commit()
+                with db_lock: conn.commit()
 
     loop = asyncio.get_event_loop()
     loop.create_task(check_subs())
