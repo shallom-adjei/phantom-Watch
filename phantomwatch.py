@@ -129,12 +129,19 @@ def run_command(cmd: str, timeout: int = SCAN_TIMEOUT) -> str:
         return f"[!] Error: {str(e)}"
 
 async def notify_admin(text: str, context: ContextTypes.DEFAULT_TYPE):
+    """Sends a message to the admin – works even if ADMIN_CHAT_ID is not set."""
     global ADMIN_CHAT_ID
     if ADMIN_CHAT_ID:
         try:
             await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
+            return
         except:
             pass
+    # Fallback: send directly to admin username
+    try:
+        await context.bot.send_message(chat_id=f"@{ADMIN_USERNAME}", text=text)
+    except Exception as e:
+        print(f"[!] Could not notify admin: {e}")
 
 # ---------- Breach Check ----------
 async def check_breach(email: str, context, chat_id):
