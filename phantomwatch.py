@@ -473,24 +473,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=query.message.chat_id, text=how_text, parse_mode='Markdown')
         await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
-    if data == "help":
-        help_text = "\n\n".join([
-            "*⚡ Nmap* – Port scanning & vuln detection.\nProtection: firewall, patching.",
-            "*🕵️ Nikto* – Web server misconfigurations.\nProtection: update CMS, security headers.",
-            "*🔎 WhatWeb* – Technology fingerprinting.\nProtection: hide banners, WAF.",
-            "*📧 theHarvester* – OSINT email gathering.\nProtection: DMARC, staff training.",
-            "*🔄 dnstwist* – Typosquatting detection.\nProtection: monitor domains, buy variants.",
-            "*📄 Metagoofil* – Document metadata.\nProtection: strip metadata before publishing.",
-            "*👤 Sherlock* – Social media search.\nProtection: 2FA, remove unused profiles.",
-            "*🦠 Dalfox* – XSS scanner.\nProtection: input sanitisation, CSP.",
-            "*🩸 Breach Check* – Checks email against known data breaches.",
-            "*🔑 GitHub Scan* – Detects leaked API keys/tokens."
-        ])
-        for i in range(0, len(help_text), 4000):
-            await context.bot.send_message(chat_id=query.message.chat_id, text=help_text[i:i+4000], parse_mode='Markdown')
-        await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
-        return
-        if data == "pricing":
+    if data == "pricing":
         pricing_text = (
             "💲 *Phantom Watch Pricing Plans*\n\n"
             "🆓 *Free Trial* – 7 days\n"
@@ -515,12 +498,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=query.message.chat_id, text=pricing_text, parse_mode='Markdown')
         await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
-
     if data == "contact_admin":
         # Notify admin
         await notify_admin(f"📩 Client @{username} wants to get in touch.", context)
         await context.bot.send_message(chat_id=query.message.chat_id,
                                        text="✅ Your message has been forwarded to the admin. They will contact you shortly.")
+        await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        return
+    if data == "help":
+        help_text = "\n\n".join([
+            "*⚡ Nmap* – Port scanning & vuln detection.\nProtection: firewall, patching.",
+            "*🕵️ Nikto* – Web server misconfigurations.\nProtection: update CMS, security headers.",
+            "*🔎 WhatWeb* – Technology fingerprinting.\nProtection: hide banners, WAF.",
+            "*📧 theHarvester* – OSINT email gathering.\nProtection: DMARC, staff training.",
+            "*🔄 dnstwist* – Typosquatting detection.\nProtection: monitor domains, buy variants.",
+            "*📄 Metagoofil* – Document metadata.\nProtection: strip metadata before publishing.",
+            "*👤 Sherlock* – Social media search.\nProtection: 2FA, remove unused profiles.",
+            "*🦠 Dalfox* – XSS scanner.\nProtection: input sanitisation, CSP.",
+            "*🩸 Breach Check* – Checks email against known data breaches.",
+            "*🔑 GitHub Scan* – Detects leaked API keys/tokens."
+        ])
+        for i in range(0, len(help_text), 4000):
+            await context.bot.send_message(chat_id=query.message.chat_id, text=help_text[i:i+4000], parse_mode='Markdown')
         await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
@@ -555,7 +554,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Enter the username of the client to remove (with @):")
         context.user_data['state'] = "REMOVE_USER"
         return
-
 # ----- Message handler (with all states) -----
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
