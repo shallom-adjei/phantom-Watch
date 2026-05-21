@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import subprocess, re, os, sqlite3, random, string, json, time, asyncio, shutil, requests
+import subprocess, io, re, os, sqlite3, random, string, json, time, asyncio, shutil, requests
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -7,6 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 DB_FILE = "phantom_clients.db"
+from fpdf import FPDF
 SCAN_TIMEOUT = 150
 
 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
@@ -133,6 +134,135 @@ def format_summary(domain, results):
             lines.append(f"🧩 Technology: {servers[0]}")
         else:
             lines.append("🧩 Technology: No server header detected.")
+
+# Compliance mapping
+COMPLIANCE = {
+    "xss": {"pci": "PCI-DSS 6.5.7", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "sqli": {"pci": "PCI-DSS 6.5.1", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "open_port": {"pci": "PCI-DSS 1.1.6", "hipaa": "164.308(a)(4)(ii)(B)"},
+    "vulnerable_service": {"pci": "PCI-DSS 6.1", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "leaked_email": {"pci": "PCI-DSS 6.5.10", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "typosquatting": {"pci": "N/A", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "metadata_leak": {"pci": "PCI-DSS 6.5.9", "hipaa": "164.308(a)(1)(ii)(D)"},
+    "social_media": {"pci": "N/A", "hipaa": "164.308(a)(5)(ii)(B)"},
+}
+
+def generate_pdf_report(domain, results, plan):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.add_font("DejaVu", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", uni=True)
+    pdf.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", uni=True)
+
+    pdf.set_font("DejaVu", "B", 16)
+    pdf.cell(0, 10, "PHANTOM WATCH Security Report", ln=True, align="C")
+    pdf.set_font("DejaVu", "", 10)
+    pdf.cell(0, 10, f"Domain: {domain}", ln=True)
+    pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+    pdf.ln(5)
+
+    # ---- DETAILED FINDINGS ----
+    pdf.set_font("DejaVu", "B", 12)
+    pdf.cell(0, 10, "Detailed Findings", ln=True)
+    pdf.set_font("DejaVu", "", 9)
+
+    # Nmap
+    if 'nmap' in results:
+        raw = results['nmap']
+        open_ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", raw, re.MULTILINE)
+        vulns = re.findall(r"\|.*VULNERABLE.*", raw)
+        if open_ports:
+            pdf.set_font("DejaVu", "B", 10)
+            pdf.cell(0, 6, "Open Ports:", ln=True)
+            pdf.set_font("DejaVu", "", 9)
+            for p in open_ports[:10]:
+                pdf.multi_cell(0, 5, f"• {p}")
+        if vulns:
+            pdf.set_font("DejaVu", "B", 10)
+            pdf.cell(0, 6, "Potential Vulnerabilities:", ln=True)
+            pdf.set_font("DejaVu", "", 9)
+            for v in vulns[:5]:
+                pdf.multi_cell(0, 5, f"• {v.strip()}")
+        if not open_ports and not vulns:
+            pdf.cell(0, 6, "No open ports or vulnerabilities detected.", ln=True)
+
+    # Nikto
+    if 'nikto' in results:
+        findings = re.findall(r"\+ (.*)", results['nikto'])
+        if findings:
+            pdf.set_font("DejaVu", "B", 10)
+            pdf.cell(0, 6, "Web Application Issues:", ln=True)
+            pdf.set_font("DejaVu", "", 9)
+            for f in findings[:10]:
+                pdf.multi_cell(0, 5, f"• {f}")
+        else:
+            pdf.cell(0, 6, "No web application issues found.", ln=True)
+
+    # WhatWeb
+    if 'whatweb' in results:
+        clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
+        pdf.cell(0, 6, f"Technology: {clean[:200]}", ln=True)
+
+    # theHarvester
+    if 'theHarvester' in results and results['theHarvester'] != "No email":
+        harvest = results['theHarvester']
+        if "<html" in harvest.lower():
+            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
+            if emails:
+                pdf.set_font("DejaVu", "B", 10)
+                pdf.cell(0, 6, f"Leaked Emails ({len(emails)}):", ln=True)
+                pdf.set_font("DejaVu", "", 9)
+                pdf.multi_cell(0, 5, ", ".join(emails[:10]))
+
+    # dnstwist
+    if 'dnstwist' in results:
+        registered = re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE)
+        if registered:
+            pdf.set_font("DejaVu", "B", 10)
+            pdf.cell(0, 6, "Typosquatting Domains:", ln=True)
+            pdf.set_font("DejaVu", "", 9)
+            for d in registered[:5]:
+                pdf.multi_cell(0, 5, f"• {d}")
+
+    # Metagoofil
+    if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
+        pdf.set_font("DejaVu", "B", 10)
+        pdf.cell(0, 6, "Document Metadata Leaks:", ln=True)
+        pdf.set_font("DejaVu", "", 9)
+        pdf.multi_cell(0, 5, results['metagoofil'][:500])
+
+    # Sherlock
+    if 'sherlock' in results:
+        found = re.findall(r"\[\+\] (.*)", results['sherlock'])
+        if found:
+            pdf.set_font("DejaVu", "B", 10)
+            pdf.cell(0, 6, "Social Media Accounts:", ln=True)
+            pdf.set_font("DejaVu", "", 9)
+            for f in found[:10]:
+                pdf.multi_cell(0, 5, f"• {f}")
+
+    # ---- COMPLIANCE TABLE ----
+    pdf.ln(5)
+    pdf.set_font("DejaVu", "B", 12)
+    pdf.cell(0, 10, "Compliance Status", ln=True)
+    pdf.set_font("DejaVu", "", 9)
+    for category, rules in COMPLIANCE.items():
+        if category == "xss" and 'dalfox' in results and "vulnerable" in results.get('dalfox','').lower():
+            status = "❌"
+        elif category == "open_port" and any("open" in str(results.get('nmap',''))):
+            status = "❌"
+        elif category == "vulnerable_service" and any("VULNERABLE" in str(results.get('nmap',''))):
+            status = "❌"
+        elif category == "leaked_email" and 'theHarvester' in results and "Leaked" in str(results.get('theHarvester','')):
+            status = "❌"
+        else:
+            status = "✅"
+        pdf.cell(0, 6, f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}", ln=True)
+
+    buf = io.BytesIO()
+    pdf.output(buf)
+    buf.seek(0)
+    return buf
+
     else:
         lines.append("🧩 Technology: Not run.")
     # theHarvester
@@ -526,6 +656,17 @@ async def message_handler(update, context):
         if results:
             summary = format_summary(domain, results)
             await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode='Markdown')
+            # Send PDF for monthly/enterprise plans
+            c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+            row = c.fetchone()
+            plan = row[0] if row else "free"
+            if plan in ("monthly", "enterprise"):
+                try:
+                    pdf_buf = generate_pdf_report(domain, results, plan)
+                    pdf_buf.name = f"PhantomWatch-{domain}-report.pdf"
+                    await context.bot.send_document(chat_id=chat_id, document=pdf_buf, caption="📎 Detailed compliance report")
+                except Exception as e:
+                    await context.bot.send_message(chat_id=chat_id, text=f"⚠️ PDF generation failed: {e}")
         else:
             await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
 
