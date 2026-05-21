@@ -581,7 +581,15 @@ async def start(update, context):
 
 async def safe_edit(query, text, **kwargs):
     try:
-        await safe_edit(query, text, **kwargs)
+        try:
+
+            await query.edit_message_text(text, **kwargs)
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}")
     except Exception as e:
         if "Message is not modified" not in str(e):
             print(f"Edit error: {e}")
@@ -593,37 +601,85 @@ async def button_handler(update, context):
     username = query.from_user.username
 
     if data == "main_menu":
-        await safe_edit(query, 
+        try:
+
+            await query.edit_message_text(
             "⬇️ Main Menu:",
-            reply_markup=main_menu(username == ADMIN_USERNAME),
+            reply_markup=main_menu(username == ADMIN_USERNAME)
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}"),
         )
         return
 
     # Scan full
     if data == "scan_full":
         if not is_active(username):
-            await safe_edit(query, "⛔ Not authorized or trial expired.")
+            try:
+
+                await query.edit_message_text("⛔ Not authorized or trial expired.")
+
+            except Exception as e:
+
+                if "Message is not modified" not in str(e):
+
+                    print(f"Edit error: {e}")
             return
         context.user_data["scan_type"] = "full"
         context.user_data["tools"] = None
-        await safe_edit(query, "📌 Send the domain name to scan.")
+        try:
+
+            await query.edit_message_text("📌 Send the domain name to scan.")
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}")
         context.user_data["state"] = "SCAN_DOMAIN"
         return
 
     # Quick scan
     if data == "scan_quick":
         if not is_active(username):
-            await safe_edit(query, "⛔ Not authorized or trial expired.")
+            try:
+
+                await query.edit_message_text("⛔ Not authorized or trial expired.")
+
+            except Exception as e:
+
+                if "Message is not modified" not in str(e):
+
+                    print(f"Edit error: {e}")
             return
-        await safe_edit(query, 
+        try:
+
+            await query.edit_message_text(
             "Choose a quick scan type:", reply_markup=quick_scan_menu()
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}")
         )
         return
 
     # Quick scan sub-options
     if data.startswith("quick_"):
         if not is_active(username):
-            await safe_edit(query, "⛔ Not authorized or trial expired.")
+            try:
+
+                await query.edit_message_text("⛔ Not authorized or trial expired.")
+
+            except Exception as e:
+
+                if "Message is not modified" not in str(e):
+
+                    print(f"Edit error: {e}")
             return
         if data == "quick_ports":
             tools = ["nmap", "nikto"]
@@ -635,13 +691,29 @@ async def button_handler(update, context):
             tools = ["dalfox"]
         context.user_data["tools"] = tools
         context.user_data["scan_type"] = "quick"
-        await safe_edit(query, "📌 Send the domain name to scan.")
+        try:
+
+            await query.edit_message_text("📌 Send the domain name to scan.")
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}")
         context.user_data["state"] = "SCAN_DOMAIN"
         return
 
     # Set email
     if data == "set_email":
-        await safe_edit(query, "📧 Please send your email address:")
+        try:
+
+            await query.edit_message_text("📧 Please send your email address:")
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}")
         context.user_data["state"] = "SET_EMAIL"
         return
 
@@ -691,9 +763,17 @@ async def button_handler(update, context):
             text=pricing_text,
             parse_mode="Markdown",
         )
-        await safe_edit(query, 
+        try:
+
+            await query.edit_message_text(
             "🔮 Return to main menu:",
-            reply_markup=main_menu(username == ADMIN_USERNAME),
+            reply_markup=main_menu(username == ADMIN_USERNAME)
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}"),
         )
         return
 
@@ -746,16 +826,32 @@ async def button_handler(update, context):
             text=how_text,
             parse_mode="Markdown",
         )
-        await safe_edit(query, 
+        try:
+
+            await query.edit_message_text(
             "🔮 Return to main menu:",
-            reply_markup=main_menu(username == ADMIN_USERNAME),
+            reply_markup=main_menu(username == ADMIN_USERNAME)
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}"),
         )
         return
 
     # Check breaches
     if data == "check_breaches":
         if not is_active(username):
-            await safe_edit(query, "⛔ Not authorized or trial expired.")
+            try:
+
+                await query.edit_message_text("⛔ Not authorized or trial expired.")
+
+            except Exception as e:
+
+                if "Message is not modified" not in str(e):
+
+                    print(f"Edit error: {e}")
             return
         c.execute(
             "SELECT email_collect FROM clients WHERE username=?", (username,)
@@ -763,34 +859,82 @@ async def button_handler(update, context):
         row = c.fetchone()
         email = row[0] if row else ""
         if not email:
-            await safe_edit(query, 
+            try:
+
+                await query.edit_message_text(
                 "📧 Please set your email first using the *Set Email* button."
             )
+
+            except Exception as e:
+
+                if "Message is not modified" not in str(e):
+
+                    print(f"Edit error: {e}")
         else:
-            await safe_edit(query, "🩸 Checking breaches...")
+            try:
+
+                await query.edit_message_text("🩸 Checking breaches...")
+
+            except Exception as e:
+
+                if "Message is not modified" not in str(e):
+
+                    print(f"Edit error: {e}")
             await check_breach(email, context, query.message.chat_id)
         return
 
     # Subscribe
     if data == "subscribe":
         if not is_active(username):
-            await safe_edit(query, "⛔ Not authorized or trial expired.")
+            try:
+
+                await query.edit_message_text("⛔ Not authorized or trial expired.")
+
+            except Exception as e:
+
+                if "Message is not modified" not in str(e):
+
+                    print(f"Edit error: {e}")
             return
-        await safe_edit(query, 
+        try:
+
+            await query.edit_message_text(
             "📌 Send the domain you want to monitor weekly:"
         )
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}")
         context.user_data["state"] = "SUBSCRIBE_DOMAIN"
         return
 
     # GitHub scan
     if data == "github_scan":
         if not is_client(username):
-            await safe_edit(query, 
+            try:
+
+                await query.edit_message_text(
                 "🔑 This feature requires Enterprise plan."
             )
+
+            except Exception as e:
+
+                if "Message is not modified" not in str(e):
+
+                    print(f"Edit error: {e}")
             return
-        await safe_edit(query, 
-            "🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):"
+        try:
+
+            await query.edit_message_text(
+            "🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo)
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}"):"
         )
         context.user_data["state"] = "GITHUB_SCAN"
         return
@@ -840,17 +984,33 @@ async def button_handler(update, context):
             text=help_text,
             parse_mode="Markdown",
         )
-        await safe_edit(query, 
+        try:
+
+            await query.edit_message_text(
             "🔮 Return to main menu:",
-            reply_markup=main_menu(username == ADMIN_USERNAME),
+            reply_markup=main_menu(username == ADMIN_USERNAME)
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}"),
         )
         return
 
     # Contact admin
     if data == "contact_admin":
-        await safe_edit(query, 
+        try:
+
+            await query.edit_message_text(
             "✅ Your message has been forwarded to the admin. They will contact you shortly."
         )
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}")
         try:
             await context.bot.send_message(
                 chat_id=f"@{ADMIN_USERNAME}",
@@ -864,28 +1024,60 @@ async def button_handler(update, context):
     if data == "admin_menu":
         if username != ADMIN_USERNAME:
             return
-        await safe_edit(query, "👑 Admin Panel:", reply_markup=admin_menu())
+        try:
+
+            await query.edit_message_text("👑 Admin Panel:", reply_markup=admin_menu()
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}"))
         return
 
     if data == "admin_adduser":
         if username != ADMIN_USERNAME:
             return
-        await safe_edit(query, "Enter client username (with @):")
+        try:
+
+            await query.edit_message_text("Enter client username (with @)
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}"):")
         context.user_data["state"] = "ADDUSER_USERNAME"
         return
 
     if data == "admin_verify":
         if username != ADMIN_USERNAME:
             return
-        await safe_edit(query, "Enter client username (with @):")
+        try:
+
+            await query.edit_message_text("Enter client username (with @)
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}"):")
         context.user_data["state"] = "VERIFY_USERNAME"
         return
 
     if data == "admin_removeuser":
         if username != ADMIN_USERNAME:
             return
-        await safe_edit(query, 
-            "Enter the username of the client to remove (with @):"
+        try:
+
+            await query.edit_message_text(
+            "Enter the username of the client to remove (with @)
+
+        except Exception as e:
+
+            if "Message is not modified" not in str(e):
+
+                print(f"Edit error: {e}"):"
         )
         context.user_data["state"] = "REMOVE_USER"
         return
