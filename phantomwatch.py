@@ -5,7 +5,7 @@ Phantom Watch – Elite Digital Reconnaissance System
 
 import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio
 from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -359,6 +359,11 @@ def get_full_help_text() -> str:
     return "\n\n".join(TOOL_HELP.values())
 
 # ==================== BUTTON MENUS ====================
+# Persistent reply keyboard button
+menu_button = ReplyKeyboardMarkup(
+    [[KeyboardButton("🛡️ Menu")]], resize_keyboard=True, one_time_keyboard=False
+)
+
 def main_menu_keyboard(user_is_admin=False):
     buttons = [
         [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full")],
@@ -442,13 +447,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "how_it_works":
         how_text = (
-            "📖 *How to Use Phantom Watch*\n\n"
-            "1️⃣ *You Get Added* – The admin registers your Telegram username and verifies your domain.\n"
-            "2️⃣ *Choose a Scan* – Tap *Full Scan* for a comprehensive analysis, or *Quick Scan* for a targeted check.\n"
-            "3️⃣ *Watch the Magic* – Live progress updates show each tool running. It feels like a real hack!\n"
-            "4️⃣ *Get Your Report* – A detailed report lands in your chat, highlighting every risk and how to fix it.\n"
-            "5️⃣ *Stay Secure* – Use the report to patch holes before attackers find them.\n\n"
-            "💡 *Pro Tip:* Set your email with the 📧 button to uncover leaked credentials tied to your domain."
+            "📖 *How Phantom Watch Operates*\n\n"
+            "1️⃣ *Registration* – The administrator adds your Telegram account and verifies ownership of your domain.\n"
+            "2️⃣ *Scan Selection* – Choose a comprehensive *Full Scan* (all reconnaissance modules) or a *Quick Scan* for specific areas.\n"
+            "3️⃣ *Live Monitoring* – Watch real‑time progress as each security tool runs. You'll know exactly what is being checked.\n"
+            "4️⃣ *Detailed Report* – Receive a structured report highlighting every finding, how it could be exploited, and clear remediation steps.\n"
+            "5️⃣ *Continuous Protection* – Use the insights to close vulnerabilities before malicious actors discover them.\n\n"
+            "💡 *Recommendation:* Set your email via the 📧 button to uncover exposed credentials associated with your domain."
         )
         await context.bot.send_message(
             chat_id=query.message.chat_id,
@@ -507,6 +512,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = user.username
     text = update.message.text.strip()
     state = context.user_data.get('state')
+
+    # Persistent menu button: if user taps "🛡️ Menu", show the main inline menu
+    if text == "🛡️ Menu":
+        await update.message.reply_text("Main Menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        return
 
     # ----- ADMIN ADD USER WIZARD -----
     if state == ADDUSER_USERNAME:
@@ -678,8 +688,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔮 What's next?", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
-    # Fallback: show menu
-    await update.message.reply_text("🔮 Use the buttons below.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+    # Fallback: show menu and keep the persistent button
+    await update.message.reply_text(
+        "I didn't understand that. Use the buttons below, or tap *🛡️ Menu* next to the text field.",
+        reply_markup=main_menu_keyboard(username == ADMIN_USERNAME),
+        parse_mode='Markdown'
+    )
 
 # ==================== COMMAND HANDLERS ====================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -688,29 +702,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.username == ADMIN_USERNAME:
         ADMIN_CHAT_ID = update.message.chat_id
 
-    # ASCII art as plain text – avoids MarkdownV2 parsing errors
-    logo = (
-        "```\n"
-        "██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗    ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗\n"
-        "██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║    ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║\n"
-        "██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║    ██║ █╗ ██║███████║   ██║   ██║     ███████║\n"
-        "██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║    ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║\n"
-        "██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║    ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║\n"
-        "╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝     ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝\n"
-        "```"
-    )
-    await context.bot.send_message(chat_id=update.message.chat_id, text=logo)
-
-    # Short but powerful description
-    await context.bot.send_message(
-        chat_id=update.message.chat_id,
-        text="🔮 *PHANTOM WATCH* – Elite Digital Reconnaissance\n"
-             "Scan your website for vulnerabilities, leaked data, and impersonation risks.\n"
-             "Select an operation below to begin.",
+    # Clean welcome – no ASCII art
+    await update.message.reply_text(
+        "🔮 *PHANTOM WATCH* – Elite Digital Reconnaissance\n"
+        "Identify vulnerabilities, leaked data, and impersonation risks before attackers do.\n\n"
+        "Use the inline buttons below, or tap *🛡️ Menu* next to the text input at any time.",
+        reply_markup=menu_button,
         parse_mode='Markdown'
     )
-
-    # Show the menu
+    # Also send the main inline menu
     await update.message.reply_text("⬇️ Main Menu:", reply_markup=main_menu_keyboard(user.username == ADMIN_USERNAME))
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
