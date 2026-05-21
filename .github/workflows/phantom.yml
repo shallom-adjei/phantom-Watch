@@ -23,7 +23,7 @@ jobs:
 
       - name: Install Python tools (pip)
         run: |
-          pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog
+          sudo pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog
 
       - name: Install Playwright browsers
         run: |
