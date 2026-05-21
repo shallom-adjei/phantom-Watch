@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
-Phantom Watch – Professional Reconnaissance Bot
-- Table‑style reports with exploitation & remediation
-- Detailed tool help
-- Concurrency safe (max 5 simultaneous scans)
+Phantom Watch – Elite Digital Reconnaissance System
 """
 
 import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio, signal
@@ -24,8 +21,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_CHAT_ID = None
 DB_FILE = "phantom_clients.db"
-SCAN_TIMEOUT = 150  # per tool (seconds)
-MAX_CONCURRENT_SCANS = 5   # limit parallel scans
+SCAN_TIMEOUT = 150
+MAX_CONCURRENT_SCANS = 5
 # ===================================
 
 # Conversation states
@@ -190,14 +187,12 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
             if progress_callback: progress_callback("👤 Sherlock searching social media...")
             company_name = domain.split('.')[0]
             results['sherlock'] = run_command(f"cd /home/runner/sherlock && python3 sherlock.py {company_name} --timeout 10")
-    # Save
     report_text = json.dumps(results, indent=2)
     c.execute("INSERT INTO scan_results (username, domain, timestamp, report) VALUES (?,?,?,?)",
               ("reserved", domain, datetime.now().isoformat(), report_text))
     conn.commit()
     return results
 
-# ==================== SMART REPORT FORMATTER ====================
 def format_report(domain: str, results: dict) -> str:
     """Structured report with Finding, Exploitation, Remediation."""
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -207,7 +202,6 @@ def format_report(domain: str, results: dict) -> str:
     report.append(f"Generated: {now}")
     report.append("=" * 40)
 
-    # ---------- TECHNOLOGY STACK ----------
     if 'whatweb' in results:
         clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
         server = re.findall(r'HTTPServer\[ (.*?) \]', clean)
@@ -222,7 +216,6 @@ def format_report(domain: str, results: dict) -> str:
         if not (server or has_cloudflare or has_403 or ips):
             report.append("  No detailed technology info captured.")
 
-    # ---------- NETWORK & PORT EXPOSURE ----------
     if 'nmap' in results:
         report.append("\n" + "=" * 40)
         report.append("🛡️ NETWORK & PORT EXPOSURE (Nmap)")
@@ -242,7 +235,6 @@ def format_report(domain: str, results: dict) -> str:
         if not open_ports and not vulns:
             report.append("  No open ports or known vulns detected.")
 
-    # ---------- WEB APPLICATION ISSUES (Nikto) ----------
     if 'nikto' in results:
         report.append("\n" + "=" * 40)
         report.append("🔥 WEB APPLICATION ISSUES (Nikto)")
@@ -255,7 +247,6 @@ def format_report(domain: str, results: dict) -> str:
         else:
             report.append("  No specific issues found.")
 
-    # ---------- EMAIL & OSINT LEAKS ----------
     if 'theHarvester' in results and results['theHarvester'] != "No email provided for OSINT.":
         report.append("\n" + "=" * 40)
         report.append("📧 EMAIL & OSINT LEAKS (theHarvester)")
@@ -274,7 +265,6 @@ def format_report(domain: str, results: dict) -> str:
         report.append("📧 EMAIL & OSINT LEAKS (theHarvester)")
         report.append("  No email provided – email OSINT skipped.")
 
-    # ---------- TYPOSQUATTING ----------
     if 'dnstwist' in results:
         report.append("\n" + "=" * 40)
         report.append("🕵️ TYPOSQUATTING RISK (dnstwist)")
@@ -287,7 +277,6 @@ def format_report(domain: str, results: dict) -> str:
         else:
             report.append("  No suspicious similar domains registered.")
 
-    # ---------- DOCUMENT METADATA ----------
     if 'metagoofil' in results and 'No dangerous' not in results['metagoofil']:
         report.append("\n" + "=" * 40)
         report.append("📄 DOCUMENT METADATA EXPOSURE (Metagoofil)")
@@ -303,7 +292,6 @@ def format_report(domain: str, results: dict) -> str:
         report.append("📄 DOCUMENT METADATA (Metagoofil)")
         report.append("  No leaks detected.")
 
-    # ---------- SOCIAL MEDIA ----------
     if 'sherlock' in results:
         report.append("\n" + "=" * 40)
         report.append("👥 SOCIAL MEDIA PRESENCE (Sherlock)")
@@ -321,11 +309,54 @@ def format_report(domain: str, results: dict) -> str:
     report.append("Always consult a professional for full assessment.")
     return "\n".join(report)
 
+# ==================== TOOL HELP TEXT ====================
+TOOL_HELP = {
+    "nmap": (
+        "*⚡ Nmap (Network Mapper)*\n"
+        "Scans for open ports, running services, OS detection, and known vulnerabilities.\n"
+        "Used by hackers to find entry points like outdated SSH, RDP, or vulnerable web servers.\n"
+        "*Protection:* Close unnecessary ports, use a firewall, keep services updated, and hide version banners."
+    ),
+    "nikto": (
+        "*🕵️ Nikto*\n"
+        "Scans web servers for dangerous files, misconfigurations, outdated software, and insecure headers.\n"
+        "Attackers exploit these to inject code, deface sites, or steal data.\n"
+        "*Protection:* Regularly update CMS/plugins, add security headers (CSP, X-Frame-Options), and remove default files."
+    ),
+    "whatweb": (
+        "*🔎 WhatWeb*\n"
+        "Identifies technologies used on a website (CMS, frameworks, analytics, CDN, etc.).\n"
+        "Hackers fingerprint the stack to launch targeted attacks against known vulnerabilities.\n"
+        "*Protection:* Mask technology signatures (e.g., modify headers), keep all components patched, and use a WAF."
+    ),
+    "theHarvester": (
+        "*📧 theHarvester*\n"
+        "Gathers emails, subdomains, IPs, and other OSINT from public sources.\n"
+        "Threat actors use this for phishing campaigns, credential stuffing, and social engineering.\n"
+        "*Protection:* Implement DMARC/SPF/DKIM, use generic contact forms, and train staff to recognise phishing."
+    ),
+    "dnstwist": (
+        "*🔄 dnstwist*\n"
+        "Detects typosquatting domains (e.g., googlle.com) that could be used to impersonate your brand.\n"
+        "Phishers register look‑alike domains to steal customer credentials.\n"
+        "*Protection:* Monitor domain registrations, purchase similar domains, and report fraudulent ones to the registrar."
+    ),
+    "metagoofil": (
+        "*📄 Metagoofil*\n"
+        "Extracts metadata from public documents (PDF, DOC, XLS) to find usernames, software versions, and paths.\n"
+        "This info helps attackers craft precise social engineering attacks or exploit internal software.\n"
+        "*Protection:* Strip metadata before publishing, avoid including internal paths or personal names in public files."
+    ),
+    "sherlock": (
+        "*👤 Sherlock*\n"
+        "Checks if a username is registered on various social media platforms.\n"
+        "Hackers use this to impersonate brands, gather intelligence, or launch targeted phishing via social channels.\n"
+        "*Protection:* Secure social accounts with 2FA, review privacy settings, and remove unused profiles."
+    ),
+}
+
 def get_full_help_text() -> str:
-    sections = []
-    for tool, desc in TOOL_HELP.items():
-        sections.append(desc)
-    return "\n\n".join(sections)
+    return "\n\n".join(TOOL_HELP.values())
 
 # ==================== BUTTON MENUS ====================
 def main_menu_keyboard(user_is_admin=False):
@@ -366,8 +397,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = query.from_user.username
 
     if data == "main_menu":
-        admin = (username == ADMIN_USERNAME)
-        await query.edit_message_text("🔮 Phantom Watch – Main Menu", reply_markup=main_menu_keyboard(admin))
+        await query.edit_message_text("🔮 Phantom Watch – Main Menu", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
     if data in ["scan_full", "scan_quick"]:
@@ -410,14 +440,30 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['state'] = SET_EMAIL
         return
 
+    if data == "how_it_works":
+        how_text = (
+            "📖 *How to Use Phantom Watch*\n\n"
+            "1\\. *Add me as a client:* The admin will register your Telegram username\\.\n"
+            "2\\. *Verify your domain:* Upload a small file or ask the admin to approve your website\\.\n"
+            "3\\. *Run a scan:* Use the buttons below to launch a full or quick scan\\.\n"
+            "4\\. *Get your report:* You’ll see live progress and a detailed security report with fixes\\.\n\n"
+            "_Pro tip: Set your email with the 📧 Set Email button to find leaked credentials\\._"
+        )
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=how_text,
+            parse_mode='MarkdownV2'
+        )
+        await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        return
+
     if data == "help":
-        # Detailed help with tool explanations
         help_text = get_full_help_text()
-        # Split if too long (Telegram limit 4096)
         for i in range(0, len(help_text), 4000):
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                text=help_text[i:i+4000]
+                text=help_text[i:i+4000],
+                parse_mode='Markdown'
             )
         await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
@@ -548,7 +594,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Invalid domain. Please try again.")
             return
 
-        # Subscription check
         if not is_subscription_active(username):
             await update.message.reply_text("⛔ Subscription expired or not authorized.")
             return
@@ -573,7 +618,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # --- Concurrency control ---
+        # Concurrency control
         sem = context.bot_data.setdefault("scan_semaphore", asyncio.Semaphore(MAX_CONCURRENT_SCANS))
         if sem.locked():
             await update.message.reply_text("⏳ Server is busy. Please wait a moment and try again.")
@@ -581,14 +626,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await sem.acquire()
         try:
-            # Start scan with animation
             await update.message.reply_text("✅ Domain verified. Launching scan...")
             chat_id = update.message.chat_id
 
             stop_anim = asyncio.Event()
             anim_task = asyncio.create_task(send_animation(chat_id, context, stop_anim))
 
-            # Progress callback (thread-safe)
             progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
             loop = asyncio.get_running_loop()
             def sync_progress(msg):
@@ -610,9 +653,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 import traceback
                 tb = traceback.format_exc()
                 print(f"[!] Scan error: {tb}")
-                await notify_admin(f"❌ Scan crashed for {domain}: {e}\n{tb[:500]}", context)
+                await notify_admin(f"❌ Scan crashed for {domain}: {e}", context)
                 await update.message.reply_text(f"❌ Scan encountered an error: {e}")
-                results = {}  # so we can still send a partial report
+                results = {}
             finally:
                 stop_anim.set()
                 await anim_task
@@ -623,13 +666,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         finally:
             sem.release()
 
-        # Build report
         report = format_report(domain, results) if results else "❌ No results (scan failed)."
         max_len = 4000
         for i in range(0, len(report), max_len):
             await context.bot.send_message(chat_id=chat_id, text=report[i:i+max_len])
 
-        # Cleanup state and show menu
         context.user_data.pop('state', None)
         context.user_data.pop('scan_type', None)
         context.user_data.pop('tools', None)
@@ -646,7 +687,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.username == ADMIN_USERNAME:
         ADMIN_CHAT_ID = update.message.chat_id
 
-    # Animated ASCII art (deep-web style)
     ascii_art = [
         "```",
         "██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗    ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗",
