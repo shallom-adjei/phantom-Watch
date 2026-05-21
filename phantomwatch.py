@@ -199,193 +199,127 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
 
 # ==================== SMART REPORT FORMATTER ====================
 def format_report(domain: str, results: dict) -> str:
-    """Structured report: grouped by type, with exploitation and remediation."""
+    """Structured report with Finding, Exploitation, Remediation."""
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    lines = [f"🔍 PHANTOM WATCH SECURITY REPORT", f"Domain: {domain}", f"Generated: {now}", ""]
+    report = []
+    report.append(f"🔍 PHANTOM WATCH SECURITY REPORT")
+    report.append(f"Domain: {domain}")
+    report.append(f"Generated: {now}")
+    report.append("=" * 40)
 
-    # --- Technology Stack ---
+    # ---------- TECHNOLOGY STACK ----------
     if 'whatweb' in results:
         clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
         server = re.findall(r'HTTPServer\[ (.*?) \]', clean)
         has_cloudflare = 'Cloudflare' in clean or 'cloudflare' in clean
         has_403 = '403' in clean
         ips = re.findall(r'IP\[ ([^\]]+) \]', clean)
-
-        lines.append("🧩 TECHNOLOGY STACK")
-        if server: lines.append(f"   Web Server : {server[0]}")
-        if has_cloudflare: lines.append("   CDN/WAF    : Cloudflare (extra protection)")
-        if has_403: lines.append("   Scanner Access : 403 Forbidden (good hardening)")
-        if ips: lines.append(f"   IPs Found  : {', '.join(ips[:3])}")
+        report.append("\n🧩 TECHNOLOGY STACK")
+        if server: report.append(f"  • Web Server : {server[0]}")
+        if has_cloudflare: report.append("  • CDN/WAF    : Cloudflare (extra protection)")
+        if has_403: report.append("  • Access     : 403 Forbidden (good hardening)")
+        if ips: report.append(f"  • IPs Found  : {', '.join(ips[:3])}")
         if not (server or has_cloudflare or has_403 or ips):
-            lines.append("   No detailed technology info captured.")
-        lines.append("")
+            report.append("  No detailed technology info captured.")
 
-    # --- Network & Port Exposure ---
+    # ---------- NETWORK & PORT EXPOSURE ----------
     if 'nmap' in results:
+        report.append("\n" + "=" * 40)
+        report.append("🛡️ NETWORK & PORT EXPOSURE (Nmap)")
         open_ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", results['nmap'], re.MULTILINE)
         vulns = re.findall(r"\|.*VULNERABLE.*", results['nmap'])
-
-        lines.append("🛡️ NETWORK & PORT EXPOSURE")
         if open_ports:
-            lines.append("   Open Ports :")
-            for port_line in open_ports[:10]:
-                lines.append(f"      • {port_line}")
+            for port_line in open_ports[:5]:
+                report.append(f"  • Finding: Open port {port_line}")
+                report.append(f"    Exploitation: Attackers can exploit outdated services, brute‑force, or gain unauthorised access.")
+                report.append(f"    Remediation: Close if not needed, apply firewall, patch regularly, use VPN for admin ports.")
         if vulns:
-            lines.append("   Potential Vulnerabilities :")
-            for v in vulns[:5]:
+            for v in vulns[:3]:
                 clean_v = v.replace('|','').strip()
-                lines.append(f"      • {clean_v}")
+                report.append(f"  • Finding: Vulnerability detected – {clean_v}")
+                report.append(f"    Exploitation: May allow remote code execution, data theft, or service disruption.")
+                report.append(f"    Remediation: Apply latest patches, review CVE details, run thorough pentest.")
         if not open_ports and not vulns:
-            lines.append("   No open ports or known vulns detected.")
+            report.append("  No open ports or known vulns detected.")
 
-        # Exploitation & Remediation for network findings
-        if open_ports or vulns:
-            lines.append("   🔓 Exploitation : Attackers can scan for open services, exploit outdated versions, or use brute‑force on exposed RDP/SSH/FTP.")
-            lines.append("   🛡️ Remediation : Close unnecessary ports, apply firewalls, patch services, use VPN for admin access.")
-        lines.append("")
-
-    # --- Web Application Issues ---
+    # ---------- WEB APPLICATION ISSUES (Nikto) ----------
     if 'nikto' in results:
+        report.append("\n" + "=" * 40)
+        report.append("🔥 WEB APPLICATION ISSUES (Nikto)")
         findings = re.findall(r"\+ (.*)", results['nikto'])
-        lines.append("🔥 WEB APPLICATION ISSUES (Nikto)")
         if findings:
-            for f in findings[:8]:
-                lines.append(f"   • {f}")
+            for f in findings[:5]:
+                report.append(f"  • Finding: {f}")
+                report.append(f"    Exploitation: Outdated software, missing headers, or sensitive files can lead to injection, data leaks, or defacement.")
+                report.append(f"    Remediation: Update all components, add security headers (CSP, X‑Frame‑Options), remove backup/test files.")
         else:
-            lines.append("   No specific issues found.")
-        if findings:
-            lines.append("   🔓 Exploitation : Outdated software, missing headers, or sensitive files can lead to injection, data leaks, or full compromise.")
-            lines.append("   🛡️ Remediation : Keep CMS/plugins updated, add security headers (CSP, X-Frame-Options), remove backup/test files.")
-        lines.append("")
+            report.append("  No specific issues found.")
 
-    # --- Email & OSINT Leaks ---
+    # ---------- EMAIL & OSINT LEAKS ----------
     if 'theHarvester' in results and results['theHarvester'] != "No email provided for OSINT.":
+        report.append("\n" + "=" * 40)
+        report.append("📧 EMAIL & OSINT LEAKS (theHarvester)")
         harvest = results['theHarvester']
         emails = []
         if "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-        lines.append("📧 EMAIL & OSINT LEAKS (theHarvester)")
         if emails:
-            lines.append(f"   Discovered Emails : {', '.join(emails[:5])}")
+            report.append(f"  • Finding: Leaked emails ({len(emails)}) – {', '.join(emails[:5])}")
+            report.append(f"    Exploitation: Phishing, credential stuffing, social engineering.")
+            report.append(f"    Remediation: Implement SPF/DKIM/DMARC, train staff, use generic contact forms.")
         else:
-            lines.append("   No emails harvested (set email for deeper scan).")
-        if emails:
-            lines.append("   🔓 Exploitation : Phishing, social engineering, credential stuffing using leaked emails.")
-            lines.append("   🛡️ Remediation : Enable email security (SPF/DKIM/DMARC), train staff to recognise phishing, use separate emails for public.")
-        lines.append("")
+            report.append("  No emails harvested (set email for deeper scan).")
+    elif 'theHarvester' in results:
+        report.append("\n" + "=" * 40)
+        report.append("📧 EMAIL & OSINT LEAKS (theHarvester)")
+        report.append("  No email provided – email OSINT skipped.")
 
-    # --- Typosquatting / Domain Impersonation ---
+    # ---------- TYPOSQUATTING ----------
     if 'dnstwist' in results:
+        report.append("\n" + "=" * 40)
+        report.append("🕵️ TYPOSQUATTING RISK (dnstwist)")
         registered = re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE)
-        lines.append("🕵️ TYPOSQUATTING RISK (dnstwist)")
         if registered:
-            for d in registered[:6]:
-                lines.append(f"   • {d}")
+            for d in registered[:5]:
+                report.append(f"  • Finding: Similar domain registered – {d}")
+                report.append(f"    Exploitation: Phishing site could steal customer credentials.")
+                report.append(f"    Remediation: Monitor registrations, consider buying similar domains, report to registrar.")
         else:
-            lines.append("   No suspicious similar domains registered.")
-        if registered:
-            lines.append("   🔓 Exploitation : Fake domains trick users into visiting phishing sites, stealing credentials.")
-            lines.append("   🛡️ Remediation : Monitor domain registrations, consider buying common misspellings, report to registrar.")
-        lines.append("")
+            report.append("  No suspicious similar domains registered.")
 
-    # --- Document Metadata ---
+    # ---------- DOCUMENT METADATA ----------
     if 'metagoofil' in results and 'No dangerous' not in results['metagoofil']:
+        report.append("\n" + "=" * 40)
+        report.append("📄 DOCUMENT METADATA EXPOSURE (Metagoofil)")
         meta = results['metagoofil']
-        lines.append("📄 DOCUMENT METADATA EXPOSURE (Metagoofil)")
         if 'usernames' in meta.lower() or 'path' in meta.lower():
-            lines.append("   ⚠️ Sensitive info (usernames/paths) found in public documents.")
+            report.append("  • Finding: Sensitive info (usernames/paths) found in public documents.")
         else:
-            lines.append(f"   {meta[:200]}")
-        lines.append("   🔓 Exploitation : Metadata reveals internal paths, software versions, or usernames for targeted attacks.")
-        lines.append("   🛡️ Remediation : Strip metadata before publishing (use tools like ExifTool), avoid putting sensitive info in public docs.")
-        lines.append("")
+            report.append(f"  • Finding: {meta[:200]}")
+        report.append(f"    Exploitation: Metadata reveals internal paths/software for targeted attacks.")
+        report.append(f"    Remediation: Strip metadata before publishing, avoid internal names in public docs.")
     elif 'metagoofil' in results:
-        lines.append("📄 DOCUMENT METADATA: No leaks detected.\n")
+        report.append("\n" + "=" * 40)
+        report.append("📄 DOCUMENT METADATA (Metagoofil)")
+        report.append("  No leaks detected.")
 
-    # --- Social Media ---
+    # ---------- SOCIAL MEDIA ----------
     if 'sherlock' in results:
+        report.append("\n" + "=" * 40)
+        report.append("👥 SOCIAL MEDIA PRESENCE (Sherlock)")
         found = re.findall(r"\[\+\] (.*)", results['sherlock'])
-        lines.append("👥 SOCIAL MEDIA PRESENCE (Sherlock)")
         if found:
-            for line in found[:10]:
-                lines.append(f"   • {line}")
+            for line in found[:5]:
+                report.append(f"  • Finding: Account found – {line}")
+            report.append(f"    Exploitation: Impersonation, social engineering, password guessing.")
+            report.append(f"    Remediation: Review privacy settings, enable 2FA, remove unused profiles.")
         else:
-            lines.append("   No social media accounts found for the domain name.")
-        if found:
-            lines.append("   🔓 Exploitation : Social media profiles can be used for impersonation, social engineering, or password guessing.")
-            lines.append("   🛡️ Remediation : Review privacy settings, remove unused accounts, enable 2FA on all profiles.")
-        lines.append("")
+            report.append("  No accounts detected for the domain name.")
 
-    lines.append("📌 Phantom Watch – Automated Security Reconnaissance")
-    lines.append("Interpretation by a professional recommended.")
-    return "\n".join(lines)
-
-# ==================== TOOL HELP TEXT ====================
-TOOL_HELP = {
-    "nmap": (
-        "*⚡ Nmap (Network Mapper)*
-"
-        "Scans for open ports, running services, OS detection, and known vulnerabilities.
-"
-        "Used by hackers to find entry points like outdated SSH, RDP, or vulnerable web servers.
-"
-        "*Protection:* Close unnecessary ports, use a firewall, keep services updated, and hide version banners."
-    ),
-    "nikto": (
-        "*🕵️ Nikto*
-"
-        "Scans web servers for dangerous files, misconfigurations, outdated software, and insecure headers.
-"
-        "Attackers exploit these to inject code, deface sites, or steal data.
-"
-        "*Protection:* Regularly update CMS/plugins, add security headers (CSP, X-Frame-Options), and remove default files."
-    ),
-    "whatweb": (
-        "*🔎 WhatWeb*
-"
-        "Identifies technologies used on a website (CMS, frameworks, analytics, CDN, etc.).
-"
-        "Hackers fingerprint the stack to launch targeted attacks against known vulnerabilities.
-"
-        "*Protection:* Mask technology signatures (e.g., modify headers), keep all components patched, and use a WAF."
-    ),
-    "theHarvester": (
-        "*📧 theHarvester*
-"
-        "Gathers emails, subdomains, IPs, and other OSINT from public sources.
-"
-        "Threat actors use this for phishing campaigns, credential stuffing, and social engineering.
-"
-        "*Protection:* Implement DMARC/SPF/DKIM, use generic contact forms, and train staff to recognise phishing."
-    ),
-    "dnstwist": (
-        "*🔄 dnstwist*
-"
-        "Detects typosquatting domains (e.g., googlle.com) that could be used to impersonate your brand.
-"
-        "Phishers register look‑alike domains to steal customer credentials.
-"
-        "*Protection:* Monitor domain registrations, purchase similar domains, and report fraudulent ones to the registrar."
-    ),
-    "metagoofil": (
-        "*📄 Metagoofil*
-"
-        "Extracts metadata from public documents (PDF, DOC, XLS) to find usernames, software versions, and paths.
-"
-        "This info helps attackers craft precise social engineering attacks or exploit internal software.
-"
-        "*Protection:* Strip metadata before publishing, avoid including internal paths or personal names in public files."
-    ),
-    "sherlock": (
-        "*👤 Sherlock*
-"
-        "Checks if a username is registered on various social media platforms.
-"
-        "Hackers use this to impersonate brands, gather intelligence, or launch targeted phishing via social channels.
-"
-        "*Protection:* Secure social accounts with 2FA, review privacy settings, and remove unused profiles."
-    ),
-}
+    report.append("\n" + "=" * 40)
+    report.append("📌 Report generated by Phantom Watch – Elite Reconnaissance")
+    report.append("Always consult a professional for full assessment.")
+    return "\n".join(report)
 
 def get_full_help_text() -> str:
     sections = []
@@ -711,7 +645,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     if user.username == ADMIN_USERNAME:
         ADMIN_CHAT_ID = update.message.chat_id
-    await update.message.reply_text("🔮 Welcome to Phantom Watch.",
+
+    # Animated ASCII art (deep-web style)
+    ascii_art = [
+        "```",
+        "██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗    ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗",
+        "██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║    ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║",
+        "██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║    ██║ █╗ ██║███████║   ██║   ██║     ███████║",
+        "██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║    ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║",
+        "██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║    ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║",
+        "╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝     ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝",
+        "```",
+        "🔮 *PHANTOM WATCH* – Elite Digital Reconnaissance System"
+    ]
+    for line in ascii_art:
+        await context.bot.send_message(chat_id=update.message.chat_id, text=line, parse_mode='MarkdownV2')
+        await asyncio.sleep(0.3)
+
+    await update.message.reply_text("Select your operation:",
                                     reply_markup=main_menu_keyboard(user.username == ADMIN_USERNAME))
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
