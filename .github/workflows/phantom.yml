@@ -27,8 +27,8 @@ jobs:
 
       - name: Install Playwright browsers
         run: |
-          sudo playwright install-deps
-          playwright install chromium
+          sudo python3 -m playwright install-deps
+          python3 -m playwright install chromium
 
       - name: Download DejaVu Sans fonts (regular + bold) locally
         run: |
