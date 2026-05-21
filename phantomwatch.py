@@ -4,11 +4,11 @@ Phantom Watch – Professional Threat Intelligence Platform
 Tiers: free, monthly, enterprise
 """
 
-import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio, io, tempfile, hashlib
+import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio, io, tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, InputFile
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -27,7 +27,7 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_CHAT_ID = None
 DB_FILE = "phantom_clients.db"
 SCAN_TIMEOUT = 150
-MAX_CONCURRENT_SCANS = 3  # lowered to give headless browser room
+MAX_CONCURRENT_SCANS = 3
 
 # Compliance mapping
 COMPLIANCE = {
@@ -42,7 +42,7 @@ COMPLIANCE = {
 }
 # ===================================
 
-# Database (same as before, plus new table for tech fingerprint)
+# Database
 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS clients (
@@ -65,7 +65,6 @@ c.execute('''CREATE TABLE IF NOT EXISTS subscriptions (
     last_scan_time TEXT, last_report_json TEXT,
     PRIMARY KEY(username, domain)
 )''')
-# New table to store client technologies for CVE monitoring
 c.execute('''CREATE TABLE IF NOT EXISTS client_tech (
     username TEXT, domain TEXT, tech TEXT,
     last_check TEXT,
@@ -73,7 +72,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS client_tech (
 )''')
 conn.commit()
 
-# ---------- Helpers (unchanged) ----------
+# ---------- Helpers ----------
 def is_client(username: str) -> bool:
     c.execute("SELECT 1 FROM clients WHERE username=?", (username,))
     return c.fetchone() is not None
@@ -98,14 +97,12 @@ def get_client_plan(username: str) -> str:
     return row[0] if row else "free"
 
 def add_client(username: str, plan: str = "free", expiry: str = ""):
-    c.execute("INSERT OR REPLACE INTO clients VALUES (?,?,?,?)",
-              (username, plan, expiry, ""))
+    c.execute("INSERT OR REPLACE INTO clients VALUES (?,?,?,?)", (username, plan, expiry, ""))
     conn.commit()
 
 def set_plan(username: str, plan: str, months: int):
     new_expiry = (datetime.now() + timedelta(days=30*months)).strftime("%Y-%m-%d")
-    c.execute("UPDATE clients SET plan=?, expiry=? WHERE username=?",
-              (plan, new_expiry, username))
+    c.execute("UPDATE clients SET plan=?, expiry=? WHERE username=?", (plan, new_expiry, username))
     conn.commit()
 
 def set_free_expiry(username: str):
@@ -141,8 +138,9 @@ async def notify_admin(text: str, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"[!] Could not notify admin: {e}")
 
-# ---------- Breach Check (unchanged, XposedOrNot + optional HIBP) ----------
+# ---------- Breach Check (unchanged) ----------
 async def check_breach(email: str, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    # XposedOrNot (free) + optional HIBP fallback
     try:
         resp = requests.get(f"https://api.xposedornot.com/v1/breach-analytics?email={email}", timeout=15)
         if resp.status_code == 200:
@@ -159,7 +157,7 @@ async def check_breach(email: str, context: ContextTypes.DEFAULT_TYPE, chat_id: 
                     lines.append(f"… and {total-10} more breaches.")
                 await context.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode='Markdown')
                 return
-    except Exception:
+    except:
         pass
     hibp_key = os.getenv("HIBP_API_KEY", "")
     if hibp_key:
@@ -171,33 +169,31 @@ async def check_breach(email: str, context: ContextTypes.DEFAULT_TYPE, chat_id: 
                 names = [b["Name"] for b in breaches]
                 await context.bot.send_message(chat_id=chat_id, text=f"🩸 *HIBP Report for {email}*\nFound in *{len(names)}* breaches:\n• " + "\n• ".join(names[:10]), parse_mode='Markdown')
                 return
-        except Exception:
+        except:
             pass
     await context.bot.send_message(chat_id=chat_id, text="✅ No breaches found for this email.")
 
 # ---------- Exploitation Proof (Playwright) ----------
 async def capture_exploit_screenshot(url: str, payload: str, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
-    """Try to inject XSS/SQLi payload and take screenshot."""
+    """Try to inject XSS payload and take screenshot."""
     from playwright.async_api import async_playwright
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-            # For XSS, inject payload into a GET param
             test_url = f"{url}?q={payload}"
             await page.goto(test_url, wait_until="networkidle", timeout=15000)
             await page.wait_for_timeout(2000)
             screenshot = await page.screenshot(full_page=True)
             await browser.close()
-            # Send as photo
             await context.bot.send_photo(chat_id=chat_id, photo=io.BytesIO(screenshot),
                                          caption="🔴 *Exploitation Proof* – Payload executed.", parse_mode='Markdown')
             return True
     except Exception as e:
-        await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Could not capture screenshot: {e}")
+        await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Screenshot capture failed: {e}")
         return False
 
-# ---------- Scan Engine (unchanged max‑depth) ----------
+# ---------- Scan Engine (max‑depth, same as before) ----------
 def run_scan(domain: str, email: str = "", progress_callback=None, tools: list = None, instant_callback=None) -> dict:
     if tools is None:
         tools = ["nmap", "nikto", "whatweb", "theHarvester", "dnstwist", "metagoofil", "sherlock", "dalfox"]
@@ -220,7 +216,7 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
             results['whatweb'] = run_command(f"whatweb {domain}")
         elif tool == "theHarvester":
             if email:
-                results['theHarvester'] = run_command(f"theHarvester -d {domain} -b google -f report_{domain}.html")
+                raw = run_command(f"theHarvester -d {domain} -b google -f report_{domain}.html")
                 if os.path.exists(f"report_{domain}.html"):
                     with open(f"report_{domain}.html", "r") as f:
                         results['theHarvester'] = f.read()
@@ -229,10 +225,11 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
                     results['theHarvester'] = "No email results."
             else:
                 results['theHarvester'] = "No email provided for OSINT."
+            if progress_callback: progress_callback("📧 OSINT email harvesting done.")
         elif tool == "dnstwist":
             results['dnstwist'] = run_command(f"dnstwist {domain}")
         elif tool == "metagoofil":
-            results['metagoofil'] = run_command(
+            raw = run_command(
                 f"cd /home/runner/metagoofil && python3 metagoofil.py -d {domain} -t pdf,doc,xls -l 20 -n 10 -o /tmp/meta_{domain} -f meta_{domain}.html",
                 timeout=300
             )
@@ -250,31 +247,35 @@ def run_scan(domain: str, email: str = "", progress_callback=None, tools: list =
         elif tool == "dalfox":
             raw = run_command(f"dalfox url http://{domain} --silence", timeout=200)
             results['dalfox'] = raw
-    # Store tech fingerprint for CVE monitoring
+    # Store tech fingerprint
     if 'whatweb' in results:
-        tech_list = []
         clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
-        for tech in re.findall(r'HTTPServer\[ (.*?) \]|Cloudflare', clean):
-            tech_list.append(tech.strip())
+        tech_list = re.findall(r'HTTPServer\[ (.*?) \]', clean)
         if tech_list:
             for tech in tech_list:
-                c.execute("INSERT OR REPLACE INTO client_tech VALUES (?,?,?,?)",
-                          ("reserved", domain, tech, datetime.now().isoformat()))
+                c.execute("INSERT OR REPLACE INTO client_tech VALUES (?,?,?,?)", ("reserved", domain, tech, datetime.now().isoformat()))
             conn.commit()
-    # Save
+    # Save scan
     report_text = json.dumps(results, indent=2)
     c.execute("INSERT INTO scan_results (username, domain, timestamp, report) VALUES (?,?,?,?)",
               ("reserved", domain, datetime.now().isoformat(), report_text))
     conn.commit()
     return results
 
-# ---------- PDF Report Generator ----------
+# ---------- PDF Report Generator (Unicode‑safe) ----------
 def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Helvetica", "B", 16)
+    # Register DejaVu Sans (Unicode)
+    font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    if not os.path.exists(font_path):
+        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"  # fallback
+    pdf.add_font("DejaVu", "", font_path, uni=True)
+    pdf.set_font("DejaVu", "", 10)
+
+    pdf.set_font("DejaVu", "B", 16)
     pdf.cell(0, 10, "PHANTOM WATCH Security Report", ln=True, align="C")
-    pdf.set_font("Helvetica", "", 10)
+    pdf.set_font("DejaVu", "", 10)
     pdf.cell(0, 10, f"Domain: {domain}", ln=True)
     pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
     pdf.ln(5)
@@ -291,10 +292,25 @@ def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
         if issues: findings.append(f"{len(issues)} Nikto issues")
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
         findings.append("XSS vulnerabilities detected")
+    if 'theHarvester' in results and "Leaked" in results.get('theHarvester',''):
+        findings.append("Leaked emails found")
+    if 'dnstwist' in results and re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE):
+        findings.append("Typosquatting domains registered")
+    if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
+        findings.append("Document metadata leaks")
+    if 'sherlock' in results and re.findall(r"\[\+\] (.*)", results['sherlock']):
+        findings.append("Social media accounts found")
+    pdf.set_font("DejaVu", "B", 12)
+    pdf.cell(0, 10, "Findings Summary", ln=True)
+    pdf.set_font("DejaVu", "", 10)
+    for f in findings:
+        pdf.cell(0, 6, f"• {f}", ln=True)
+
+    pdf.ln(5)
     # Compliance mapping
-    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_font("DejaVu", "B", 12)
     pdf.cell(0, 10, "Compliance Status", ln=True)
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font("DejaVu", "", 9)
     compliance_status = {}
     for category, rules in COMPLIANCE.items():
         if category == "xss" and 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
@@ -310,14 +326,12 @@ def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
         compliance_status[category] = status
         pdf.cell(0, 6, f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}", ln=True)
 
-    pdf.ln(10)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 10, "Detailed Findings", ln=True)
-    pdf.set_font("Helvetica", "", 9)
-    # Add detailed report sections (similar to format_report but plain text for PDF)
-    # We'll reuse the format_report logic and write to PDF.
+    pdf.ln(5)
+    pdf.set_font("DejaVu", "B", 12)
+    pdf.cell(0, 10, "Detailed Findings (excerpt)", ln=True)
+    pdf.set_font("DejaVu", "", 9)
+    # Write a simplified text block
     lines = []
-    lines.append(f"Domain: {domain}")
     if 'whatweb' in results:
         clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
         if 'HTTPServer' in clean:
@@ -327,31 +341,52 @@ def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
     if 'nmap' in results:
         ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", results['nmap'], re.MULTILINE)
         if ports: lines.append(f"Open Ports: {', '.join(ports[:10])}")
-    # ... write to PDF using pdf.multi_cell
-
     pdf.multi_cell(0, 5, "\n".join(lines))
-    # Save to BytesIO
+
     buf = io.BytesIO()
     pdf.output(buf)
     buf.seek(0)
     return buf
 
-# ---------- Brief Inline Summary ----------
+# ---------- Brief Inline Summary (all tools) ----------
 def brief_summary(domain: str, results: dict) -> str:
-    summary = [f"🔍 *Scan completed for {domain}*\n"]
+    lines = [f"🔍 *Scan completed for {domain}*\n"]
     if 'nmap' in results:
-        vulns = re.findall(r"\|.*VULNERABLE.*", results['nmap'])
-        open_ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", results['nmap'], re.MULTILINE)
-        summary.append(f"🛡️ Nmap: {len(open_ports)} open ports, {len(vulns)} potential vulns")
+        vulns = len(re.findall(r"\|.*VULNERABLE.*", results['nmap']))
+        ports = len(re.findall(r"^\d+/tcp\s+open\s+", results['nmap'], re.MULTILINE))
+        lines.append(f"🛡️ Nmap: {ports} open ports, {vulns} potential vulns")
     if 'nikto' in results:
-        issues = re.findall(r"\+ (.*)", results['nikto'])
-        summary.append(f"🔥 Nikto: {len(issues)} web issues")
-    if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
-        summary.append("🦠 Dalfox: XSS found!")
-    if 'theHarvester' in results and "Leaked" in results['theHarvester']:
-        summary.append("📧 Emails leaked (see report)")
-    summary.append("\n📎 Detailed PDF report with compliance mapping is attached.")
-    return "\n".join(summary)
+        issues = len(re.findall(r"\+ (.*)", results['nikto']))
+        lines.append(f"🔥 Nikto: {issues} web issues")
+    if 'whatweb' in results:
+        clean = re.sub(r'\x1b\[[0-9;]*m', '', results['whatweb'])
+        if 'HTTPServer' in clean:
+            server = re.findall(r'HTTPServer\[ (.*?) \]', clean)[0]
+            lines.append(f"🧩 Technology: {server}")
+        if 'Cloudflare' in clean:
+            lines.append("🛡️ Cloudflare WAF present")
+    if 'theHarvester' in results and results['theHarvester'] != "No email provided for OSINT.":
+        harvest = results['theHarvester']
+        if "<html" in harvest.lower():
+            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
+            lines.append(f"📧 Emails leaked: {len(emails)}")
+        else:
+            lines.append("📧 theHarvester: no emails harvested")
+    if 'dnstwist' in results:
+        registered = len(re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE))
+        lines.append(f"🕵️ Typosquatting: {registered} domains registered")
+    if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
+        lines.append("📄 Document metadata leaks found")
+    if 'sherlock' in results:
+        found = len(re.findall(r"\[\+\] (.*)", results['sherlock']))
+        lines.append(f"👥 Social media: {found} accounts found")
+    if 'dalfox' in results:
+        if "vulnerable" in results['dalfox'].lower():
+            lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
+        else:
+            lines.append("🦠 Dalfox: no XSS found")
+    lines.append("\n📎 Detailed PDF report attached.")
+    return "\n".join(lines)
 
 # ==================== BUTTON MENUS ====================
 def main_menu_keyboard(user_is_admin=False):
@@ -495,7 +530,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
-    # Admin (unchanged)
+    # Admin menus
     if data == "admin_menu":
         if username != ADMIN_USERNAME: return
         await query.edit_message_text("👑 Admin Panel", reply_markup=admin_menu_keyboard())
@@ -533,7 +568,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
 
-    # ----- ADMIN ADD USER (unchanged) -----
+    # ----- ADMIN ADD USER -----
     if state == "ADDUSER_USERNAME":
         if username != ADMIN_USERNAME: return
         target = text.lstrip('@')
@@ -554,31 +589,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['state'] = "ADDUSER_MONTHS"
         return
     if state == "ADDUSER_MONTHS":
-        try:
-            months = int(text)
-        except:
-            await update.message.reply_text("Enter a number.")
-            return
+        try: months = int(text)
+        except: await update.message.reply_text("Enter a number."); return
         target = context.user_data['add_target']
         plan = context.user_data['add_plan']
         add_client(target, plan)
-        if plan == "free":
-            set_free_expiry(target)
-        elif months > 0:
-            set_plan(target, plan, months)
-        await update.message.reply_text(f"✅ Added @{target} with {plan} plan.",
-                                        reply_markup=admin_menu_keyboard())
-        for k in ('add_target', 'add_plan', 'state'):
-            context.user_data.pop(k, None)
+        if plan == "free": set_free_expiry(target)
+        elif months > 0: set_plan(target, plan, months)
+        await update.message.reply_text(f"✅ Added @{target} with {plan} plan.", reply_markup=admin_menu_keyboard())
+        for k in ('add_target', 'add_plan', 'state'): context.user_data.pop(k, None)
         return
 
-    # ----- ADMIN VERIFY DOMAIN (unchanged) -----
+    # ----- ADMIN VERIFY DOMAIN -----
     if state == "VERIFY_USERNAME":
         if username != ADMIN_USERNAME: return
         target = text.lstrip('@')
-        if not is_client(target):
-            await update.message.reply_text("User not a client.")
-            return
+        if not is_client(target): await update.message.reply_text("User not a client."); return
         context.user_data['verify_target'] = target
         await update.message.reply_text("Domain to verify:")
         context.user_data['state'] = "VERIFY_DOMAIN"
@@ -588,51 +614,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         domain = text.lower()
         c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (target, domain, "admin_verified"))
         conn.commit()
-        await update.message.reply_text(f"✅ Domain {domain} verified for @{target}.",
-                                        reply_markup=admin_menu_keyboard())
-        for k in ('verify_target', 'state'):
-            context.user_data.pop(k, None)
+        await update.message.reply_text(f"✅ Domain {domain} verified for @{target}.", reply_markup=admin_menu_keyboard())
+        for k in ('verify_target', 'state'): context.user_data.pop(k, None)
         return
 
     # ----- SET EMAIL -----
     if state == "SET_EMAIL":
-        if '@' not in text:
-            await update.message.reply_text("Invalid email.")
-            return
+        if '@' not in text: await update.message.reply_text("Invalid email."); return
         c.execute("UPDATE clients SET email_collect=? WHERE username=?", (text, username))
         conn.commit()
-        await update.message.reply_text(f"✅ Email set to {text}.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        await update.message.reply_text(f"✅ Email set.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         context.user_data.pop('state', None)
         return
 
     # ----- SUBSCRIBE DOMAIN -----
     if state == "SUBSCRIBE_DOMAIN":
         domain = text.lower()
-        if not re.match(r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$', domain):
-            await update.message.reply_text("Invalid domain.")
-            return
-        c.execute("INSERT OR REPLACE INTO subscriptions VALUES (?,?,?,?)",
-                  (username, domain, datetime.now().isoformat(), "{}"))
+        if not re.match(r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$', domain): await update.message.reply_text("Invalid domain."); return
+        c.execute("INSERT OR REPLACE INTO subscriptions VALUES (?,?,?,?)", (username, domain, datetime.now().isoformat(), "{}"))
         conn.commit()
-        await update.message.reply_text(f"✅ Subscribed to weekly scans for {domain}.",
-                                        reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        await update.message.reply_text(f"✅ Subscribed.", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         context.user_data.pop('state', None)
         return
 
     # ----- GITHUB SECRET SCAN -----
     if state == "GITHUB_SCAN":
         repo_url = text.strip()
-        if not repo_url.startswith("https://github.com/"):
-            await update.message.reply_text("Invalid GitHub URL.")
-            return
-        await update.message.reply_text("🔑 Scanning for secrets... This may take a few minutes.")
+        if not repo_url.startswith("https://github.com/"): await update.message.reply_text("Invalid GitHub URL."); return
+        await update.message.reply_text("🔑 Scanning for secrets...")
         try:
-            # Clone repo and run trufflehog
             repo_name = repo_url.rstrip("/").split("/")[-1]
             clone_dir = f"/tmp/{repo_name}_{random.randint(1000,9999)}"
             subprocess.run(["git", "clone", "--depth=1", repo_url, clone_dir], check=True, timeout=30)
-            result = subprocess.run(["trufflehog", "filesystem", clone_dir, "--no-update", "--json"],
-                                    capture_output=True, text=True, timeout=120)
+            result = subprocess.run(["trufflehog", "filesystem", clone_dir, "--no-update", "--json"], capture_output=True, text=True, timeout=120)
             shutil.rmtree(clone_dir, ignore_errors=True)
             findings = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
             if not findings:
@@ -653,19 +667,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not re.match(r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$', domain):
             await update.message.reply_text("❌ Invalid domain.")
             return
-
         if not is_subscription_active(username):
             await update.message.reply_text("⛔ Subscription expired.")
             return
 
         plan = get_client_plan(username)
 
-        # Verification (unchanged)
+        # Verification
         if username != ADMIN_USERNAME:
             c.execute("SELECT token FROM verification WHERE username=? AND domain=?", (username, domain))
             row = c.fetchone()
-            if row and row[0] == "admin_verified":
-                pass
+            if row and row[0] == "admin_verified": pass
             elif row and row[0] != "admin_verified":
                 if not verify_domain(domain, row[0]):
                     await update.message.reply_text("⏳ Verification file missing.")
@@ -687,7 +699,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("✅ Domain verified. Launching scan...")
             chat_id = update.message.chat_id
 
-            # Animated progress
             stop_anim = asyncio.Event()
             async def anim():
                 frames = ["[▓░░░░]","[▓▓░░░]","[▓▓▓░░]","[▓▓▓▓░]","[▓▓▓▓▓]"]
@@ -702,7 +713,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except: pass
             anim_task = asyncio.create_task(anim())
 
-            # Progress/instant callbacks
             progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
             loop = asyncio.get_running_loop()
             def sync_progress(msg):
@@ -724,9 +734,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools, instant_callback)
             except Exception as e:
-                import traceback
-                tb = traceback.format_exc()
-                print(f"[!] Scan error: {tb}")
+                import traceback; tb = traceback.format_exc(); print(f"[!] Scan error: {tb}")
                 await notify_admin(f"❌ Scan crashed: {e}", context)
                 await update.message.reply_text(f"❌ Scan error: {e}")
                 results = {}
@@ -738,24 +746,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         finally:
             sem.release()
 
-        # ---- Post-scan processing ----
         # 1. Brief inline summary
-        summary = brief_summary(domain, results) if results else "❌ No results."
-        await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode='Markdown')
+        if results:
+            summary = brief_summary(domain, results)
+            await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode='Markdown')
 
-        # 2. Exploitation proof (only for enterprise plan and if XSS found)
-        if plan == "enterprise" and results.get('dalfox') and "vulnerable" in results['dalfox'].lower():
-            await capture_exploit_screenshot(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
+            # 2. Exploitation proof (only enterprise and if XSS found)
+            if plan == "enterprise" and 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
+                # Automatically capture proof, but also offer manual button
+                await capture_exploit_screenshot(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
 
-        # 3. PDF report (for monthly/enterprise)
-        if plan in ("monthly", "enterprise") and results:
-            try:
-                pdf_buf = generate_pdf_report(domain, results, plan)
-                pdf_buf.name = f"PhantomWatch-{domain}-report.pdf"
-                await context.bot.send_document(chat_id=chat_id, document=pdf_buf,
-                                                caption="📎 Detailed compliance report")
-            except Exception as e:
-                await context.bot.send_message(chat_id=chat_id, text=f"⚠️ PDF generation failed: {e}")
+            # 3. PDF report (monthly/enterprise)
+            if plan in ("monthly", "enterprise"):
+                try:
+                    pdf_buf = generate_pdf_report(domain, results, plan)
+                    pdf_buf.name = f"PhantomWatch-{domain}-report.pdf"
+                    await context.bot.send_document(chat_id=chat_id, document=pdf_buf,
+                                                    caption="📎 Detailed compliance report")
+                except Exception as e:
+                    await context.bot.send_message(chat_id=chat_id, text=f"⚠️ PDF generation failed: {e}")
+        else:
+            await context.bot.send_message(chat_id=chat_id, text="❌ No results (scan failed).")
 
         # Cleanup
         context.user_data.pop('state', None)
@@ -769,30 +780,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ==================== BACKGROUND CVE MONITORING ====================
 async def cve_monitor_task(context: ContextTypes.DEFAULT_TYPE):
-    """Hourly check for new CVEs matching client technologies."""
     try:
-        resp = requests.get("https://services.nvd.nist.gov/rest/json/cves/2.0?pubStartDate=" +
-                            (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.000") +
-                            "&resultsPerPage=50", timeout=30)
+        resp = requests.get(
+            "https://services.nvd.nist.gov/rest/json/cves/2.0?pubStartDate=" +
+            (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.000") +
+            "&resultsPerPage=50", timeout=30)
         if resp.status_code == 200:
             cves = resp.json().get("vulnerabilities", [])
-            # For each client technology, check if any CVE matches
             c.execute("SELECT username, domain, tech FROM client_tech")
             rows = c.fetchall()
             for username, domain, tech in rows:
                 for vuln in cves:
                     desc = vuln.get("cve", {}).get("descriptions", [{}])[0].get("value", "")
                     if tech.lower() in desc.lower():
-                        # Alert client
                         cve_id = vuln["cve"]["id"]
                         try:
                             await context.bot.send_message(
                                 chat_id=f"@{username}",
-                                text=f"🚨 *Zero-day alert for {domain}*\nCVE-{cve_id} affects {tech}\nPatch immediately!",
-                                parse_mode='Markdown'
-                            )
-                        except:
-                            pass
+                                text=f"🚨 *Zero‑day alert for {domain}*\nCVE-{cve_id} affects {tech}\nPatch immediately!",
+                                parse_mode='Markdown')
+                        except: pass
     except Exception as e:
         print(f"[!] CVE monitor error: {e}")
 
@@ -821,17 +828,14 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 # ==================== MAIN ====================
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(error_handler)
 
-    # Schedule CVE monitor every hour
     jq = app.job_queue
     jq.run_repeating(cve_monitor_task, interval=3600, first=10)
 
-    # Check subscriptions on startup
     async def check_subs():
         c.execute("SELECT username, domain, last_scan_time, last_report_json FROM subscriptions")
         subs = c.fetchall()
@@ -844,10 +848,8 @@ def main():
                 results = run_scan(domain, email, tools=None)
                 prev = json.loads(last_json) if last_json and last_json != "{}" else None
                 report = brief_summary(domain, results)
-                try:
-                    await app.bot.send_message(chat_id=f"@{username}", text=report, parse_mode='Markdown')
-                except:
-                    pass
+                try: await app.bot.send_message(chat_id=f"@{username}", text=report, parse_mode='Markdown')
+                except: pass
                 c.execute("UPDATE subscriptions SET last_scan_time=?, last_report_json=? WHERE username=? AND domain=?",
                           (datetime.now().isoformat(), json.dumps(results), username, domain))
                 conn.commit()
