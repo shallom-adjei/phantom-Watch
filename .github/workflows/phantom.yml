@@ -43,5 +43,5 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           HIBP_API_KEY: ${{ secrets.HIBP_API_KEY }}
-        run: python3 phantomwatch.py
+          run: python3 test_startup.py
 # Phantom Watch workflow
