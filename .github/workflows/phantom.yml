@@ -19,7 +19,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y nmap nikto whatweb git python3-pip curl
+          sudo apt-get install -y nmap nikto whatweb git python3-pip curl fontconfig
 
       - name: Install Python tools (pip)
         run: |
@@ -29,6 +29,12 @@ jobs:
         run: |
           playwright install-deps
           playwright install chromium
+
+      - name: Download DejaVu Sans font for PDF
+        run: |
+          mkdir -p /usr/share/fonts/truetype/dejavu
+          wget -qO /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf
+          fc-cache -f
 
       - name: Clone metagoofil
         run: git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
