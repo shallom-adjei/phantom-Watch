@@ -16,27 +16,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies (apt)
+      - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y nmap nikto whatweb git python3-pip curl
 
-      - name: Install Python-based tools (pip)
+      - name: Install Python tools (pip)
         run: |
-          pip3 install --break-system-packages theharvester dnstwist python-telegram-bot
+          pip3 install --break-system-packages theharvester dnstwist python-telegram-bot fpdf2 requests playwright trufflehog
 
-      - name: Clone metagoofil into /home/runner/metagoofil
+      - name: Install Playwright browsers
         run: |
-          git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
+          playwright install-deps
+          playwright install chromium
 
-      - name: Clone sherlock and install it
+      - name: Clone metagoofil
+        run: git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
+
+      - name: Clone sherlock and install
         run: |
           git clone https://github.com/sherlock-project/sherlock.git /home/runner/sherlock
-          cd /home/runner/sherlock
-          pip3 install --break-system-packages .
+          cd /home/runner/sherlock && pip3 install --break-system-packages .
 
       - name: Run Phantom Watch
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          HIBP_API_KEY: ${{ secrets.HIBP_API_KEY }}
         run: python3 phantomwatch.py
