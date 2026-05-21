@@ -30,7 +30,7 @@ jobs:
           sudo playwright install-deps
           playwright install chromium
 
-            - name: Download DejaVu Sans fonts (regular + bold) locally
+      - name: Download DejaVu Sans fonts (regular + bold) locally
         run: |
           mkdir -p fonts
           wget -q -O fonts/DejaVuSans.ttf https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf
