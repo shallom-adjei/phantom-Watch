@@ -3,7 +3,7 @@
 Phantom Watch – Elite Digital Reconnaissance System
 """
 
-import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio, signal
+import subprocess, re, os, sqlite3, random, string, shutil, json, time, asyncio
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -443,16 +443,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "how_it_works":
         how_text = (
             "📖 *How to Use Phantom Watch*\n\n"
-            "1\\. *Add me as a client:* The admin will register your Telegram username\\.\n"
-            "2\\. *Verify your domain:* Upload a small file or ask the admin to approve your website\\.\n"
-            "3\\. *Run a scan:* Use the buttons below to launch a full or quick scan\\.\n"
-            "4\\. *Get your report:* You’ll see live progress and a detailed security report with fixes\\.\n\n"
-            "_Pro tip: Set your email with the 📧 Set Email button to find leaked credentials\\._"
+            "1️⃣ *You Get Added* – The admin registers your Telegram username and verifies your domain.\n"
+            "2️⃣ *Choose a Scan* – Tap *Full Scan* for a comprehensive analysis, or *Quick Scan* for a targeted check.\n"
+            "3️⃣ *Watch the Magic* – Live progress updates show each tool running. It feels like a real hack!\n"
+            "4️⃣ *Get Your Report* – A detailed report lands in your chat, highlighting every risk and how to fix it.\n"
+            "5️⃣ *Stay Secure* – Use the report to patch holes before attackers find them.\n\n"
+            "💡 *Pro Tip:* Set your email with the 📧 button to uncover leaked credentials tied to your domain."
         )
         await context.bot.send_message(
             chat_id=query.message.chat_id,
             text=how_text,
-            parse_mode='MarkdownV2'
+            parse_mode='Markdown'
         )
         await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
@@ -687,23 +688,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.username == ADMIN_USERNAME:
         ADMIN_CHAT_ID = update.message.chat_id
 
-    ascii_art = [
-        "```",
-        "██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗    ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗",
-        "██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║    ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║",
-        "██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║    ██║ █╗ ██║███████║   ██║   ██║     ███████║",
-        "██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║    ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║",
-        "██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║    ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║",
-        "╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝     ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝",
-        "```",
-        "🔮 *PHANTOM WATCH* – Elite Digital Reconnaissance System"
-    ]
-    for line in ascii_art:
-        await context.bot.send_message(chat_id=update.message.chat_id, text=line, parse_mode='MarkdownV2')
-        await asyncio.sleep(0.3)
+    # ASCII art as plain text – avoids MarkdownV2 parsing errors
+    logo = (
+        "```\n"
+        "██████╗ ██╗  ██╗ █████╗ ███╗   ██╗████████╗ ██████╗ ███╗   ███╗    ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗\n"
+        "██╔══██╗██║  ██║██╔══██╗████╗  ██║╚══██╔══╝██╔═══██╗████╗ ████║    ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║\n"
+        "██████╔╝███████║███████║██╔██╗ ██║   ██║   ██║   ██║██╔████╔██║    ██║ █╗ ██║███████║   ██║   ██║     ███████║\n"
+        "██╔═══╝ ██╔══██║██╔══██║██║╚██╗██║   ██║   ██║   ██║██║╚██╔╝██║    ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║\n"
+        "██║     ██║  ██║██║  ██║██║ ╚████║   ██║   ╚██████╔╝██║ ╚═╝ ██║    ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║\n"
+        "╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝     ╚═╝     ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝\n"
+        "```"
+    )
+    await context.bot.send_message(chat_id=update.message.chat_id, text=logo)
 
-    await update.message.reply_text("Select your operation:",
-                                    reply_markup=main_menu_keyboard(user.username == ADMIN_USERNAME))
+    # Short but powerful description
+    await context.bot.send_message(
+        chat_id=update.message.chat_id,
+        text="🔮 *PHANTOM WATCH* – Elite Digital Reconnaissance\n"
+             "Scan your website for vulnerabilities, leaked data, and impersonation risks.\n"
+             "Select an operation below to begin.",
+        parse_mode='Markdown'
+    )
+
+    # Show the menu
+    await update.message.reply_text("⬇️ Main Menu:", reply_markup=main_menu_keyboard(user.username == ADMIN_USERNAME))
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     err = context.error
