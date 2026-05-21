@@ -372,21 +372,22 @@ def main_menu_keyboard(user_is_admin=False):
          InlineKeyboardButton("📖 How It Works", callback_data="how_it_works")],
         [InlineKeyboardButton("❓ Help", callback_data="help"),
          InlineKeyboardButton("🩸 Check Breaches", callback_data="check_breaches")],
+        [InlineKeyboardButton("💲 Pricing", callback_data="pricing"),
+         InlineKeyboardButton("📩 Contact Admin", callback_data="contact_admin")],
         [InlineKeyboardButton("🔔 Subscribe", callback_data="subscribe"),
          InlineKeyboardButton("🔑 Scan GitHub", callback_data="github_scan")],
     ]
     if user_is_admin:
         buttons.append([InlineKeyboardButton("👑 Admin Menu", callback_data="admin_menu")])
     return InlineKeyboardMarkup(buttons)
-
 def admin_menu_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add User", callback_data="admin_adduser"),
          InlineKeyboardButton("✅ Verify Domain", callback_data="admin_verify")],
         [InlineKeyboardButton("📊 Status", callback_data="admin_status"),
-         InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
+         InlineKeyboardButton("❌ Remove User", callback_data="admin_removeuser")],
+        [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ])
-
 def quick_scan_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🛡️ Ports & Vulns", callback_data="quick_ports")],
@@ -489,6 +490,39 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=query.message.chat_id, text=help_text[i:i+4000], parse_mode='Markdown')
         await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
         return
+        if data == "pricing":
+        pricing_text = (
+            "💲 *Phantom Watch Pricing Plans*\n\n"
+            "🆓 *Free Trial* – 7 days\n"
+            "• One full scan\n"
+            "• Basic summary\n"
+            "*Price:* Free\n\n"
+            "🛡️ *Monthly* – $199/month\n"
+            "• Unlimited full scans\n"
+            "• PDF reports with compliance mapping\n"
+            "• Breach intelligence\n"
+            "• Weekly subscription scans\n"
+            "*Price:* $199/month\n\n"
+            "👑 *Enterprise* – $2,000/month\n"
+            "• Everything in Monthly\n"
+            "• Exploitation proof screenshots\n"
+            "• Continuous CVE monitoring (hourly alerts)\n"
+            "• GitHub secret scanning (leaked API keys)\n"
+            "• Priority support\n"
+            "*Price:* $2,000/month\n\n"
+            "📩 Contact admin to subscribe or upgrade."
+        )
+        await context.bot.send_message(chat_id=query.message.chat_id, text=pricing_text, parse_mode='Markdown')
+        await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        return
+
+    if data == "contact_admin":
+        # Notify admin
+        await notify_admin(f"📩 Client @{username} wants to get in touch.", context)
+        await context.bot.send_message(chat_id=query.message.chat_id,
+                                       text="✅ Your message has been forwarded to the admin. They will contact you shortly.")
+        await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu_keyboard(username == ADMIN_USERNAME))
+        return
 
     # Admin
     if data == "admin_menu":
@@ -515,6 +549,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if e: msg += f" (exp: {e})"
             msg += "\n"
         await query.edit_message_text(msg, reply_markup=admin_menu_keyboard())
+        return
+    if data == "admin_removeuser":
+        if username != ADMIN_USERNAME: return
+        await query.edit_message_text("Enter the username of the client to remove (with @):")
+        context.user_data['state'] = "REMOVE_USER"
         return
 
 # ----- Message handler (with all states) -----
@@ -557,6 +596,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif months > 0: set_plan(target, plan, months)
         await update.message.reply_text(f"✅ Added @{target} with {plan} plan.", reply_markup=admin_menu_keyboard())
         for k in ('add_target', 'add_plan', 'state'): context.user_data.pop(k, None)
+        return
+    # ----- REMOVE USER -----
+    if state == "REMOVE_USER":
+        if username != ADMIN_USERNAME:
+            await update.message.reply_text("❌ Admin only.")
+            return
+        target = text.lstrip('@')
+        if not is_client(target):
+            await update.message.reply_text("User is not a client.")
+            return
+        # Set expiry to yesterday → instantly inactive
+        c.execute("UPDATE clients SET expiry='2000-01-01' WHERE username=?", (target,))
+        conn.commit()
+        await update.message.reply_text(f"❌ User @{target} has been removed. They can no longer use the bot.",
+                                        reply_markup=admin_menu_keyboard())
+        context.user_data.pop('state', None)
         return
 
     # ----- ADMIN VERIFY DOMAIN -----
@@ -632,8 +687,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not re.match(r'^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$', domain):
             await update.message.reply_text("❌ Invalid domain."); return
         if not is_subscription_active(username):
-            await update.message.reply_text("⛔ Subscription expired."); return
-
+            await update.message.reply_text("⛔ You are not an authorized client. Tap /start and choose *📩 Contact Admin* to request access.",
+                                parse_mode='Markdown')
         plan = get_client_plan(username)
         if username != ADMIN_USERNAME:
             c.execute("SELECT token FROM verification WHERE username=? AND domain=?", (username, domain))
