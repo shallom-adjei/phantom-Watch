@@ -578,6 +578,14 @@ async def start(update, context):
         parse_mode="Markdown",
     )
 
+
+async def safe_edit(query, text, **kwargs):
+    try:
+        await safe_edit(query, text, **kwargs)
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            print(f"Edit error: {e}")
+
 async def button_handler(update, context):
     query = update.callback_query
     await query.answer()
@@ -585,7 +593,7 @@ async def button_handler(update, context):
     username = query.from_user.username
 
     if data == "main_menu":
-        await query.edit_message_text(
+        await safe_edit(query, 
             "⬇️ Main Menu:",
             reply_markup=main_menu(username == ADMIN_USERNAME),
         )
@@ -594,20 +602,20 @@ async def button_handler(update, context):
     # Scan full
     if data == "scan_full":
         if not is_active(username):
-            await query.edit_message_text("⛔ Not authorized or trial expired.")
+            await safe_edit(query, "⛔ Not authorized or trial expired.")
             return
         context.user_data["scan_type"] = "full"
         context.user_data["tools"] = None
-        await query.edit_message_text("📌 Send the domain name to scan.")
+        await safe_edit(query, "📌 Send the domain name to scan.")
         context.user_data["state"] = "SCAN_DOMAIN"
         return
 
     # Quick scan
     if data == "scan_quick":
         if not is_active(username):
-            await query.edit_message_text("⛔ Not authorized or trial expired.")
+            await safe_edit(query, "⛔ Not authorized or trial expired.")
             return
-        await query.edit_message_text(
+        await safe_edit(query, 
             "Choose a quick scan type:", reply_markup=quick_scan_menu()
         )
         return
@@ -615,7 +623,7 @@ async def button_handler(update, context):
     # Quick scan sub-options
     if data.startswith("quick_"):
         if not is_active(username):
-            await query.edit_message_text("⛔ Not authorized or trial expired.")
+            await safe_edit(query, "⛔ Not authorized or trial expired.")
             return
         if data == "quick_ports":
             tools = ["nmap", "nikto"]
@@ -627,13 +635,13 @@ async def button_handler(update, context):
             tools = ["dalfox"]
         context.user_data["tools"] = tools
         context.user_data["scan_type"] = "quick"
-        await query.edit_message_text("📌 Send the domain name to scan.")
+        await safe_edit(query, "📌 Send the domain name to scan.")
         context.user_data["state"] = "SCAN_DOMAIN"
         return
 
     # Set email
     if data == "set_email":
-        await query.edit_message_text("📧 Please send your email address:")
+        await safe_edit(query, "📧 Please send your email address:")
         context.user_data["state"] = "SET_EMAIL"
         return
 
@@ -683,7 +691,7 @@ async def button_handler(update, context):
             text=pricing_text,
             parse_mode="Markdown",
         )
-        await query.edit_message_text(
+        await safe_edit(query, 
             "🔮 Return to main menu:",
             reply_markup=main_menu(username == ADMIN_USERNAME),
         )
@@ -738,7 +746,7 @@ async def button_handler(update, context):
             text=how_text,
             parse_mode="Markdown",
         )
-        await query.edit_message_text(
+        await safe_edit(query, 
             "🔮 Return to main menu:",
             reply_markup=main_menu(username == ADMIN_USERNAME),
         )
@@ -747,7 +755,7 @@ async def button_handler(update, context):
     # Check breaches
     if data == "check_breaches":
         if not is_active(username):
-            await query.edit_message_text("⛔ Not authorized or trial expired.")
+            await safe_edit(query, "⛔ Not authorized or trial expired.")
             return
         c.execute(
             "SELECT email_collect FROM clients WHERE username=?", (username,)
@@ -755,20 +763,20 @@ async def button_handler(update, context):
         row = c.fetchone()
         email = row[0] if row else ""
         if not email:
-            await query.edit_message_text(
+            await safe_edit(query, 
                 "📧 Please set your email first using the *Set Email* button."
             )
         else:
-            await query.edit_message_text("🩸 Checking breaches...")
+            await safe_edit(query, "🩸 Checking breaches...")
             await check_breach(email, context, query.message.chat_id)
         return
 
     # Subscribe
     if data == "subscribe":
         if not is_active(username):
-            await query.edit_message_text("⛔ Not authorized or trial expired.")
+            await safe_edit(query, "⛔ Not authorized or trial expired.")
             return
-        await query.edit_message_text(
+        await safe_edit(query, 
             "📌 Send the domain you want to monitor weekly:"
         )
         context.user_data["state"] = "SUBSCRIBE_DOMAIN"
@@ -777,11 +785,11 @@ async def button_handler(update, context):
     # GitHub scan
     if data == "github_scan":
         if not is_client(username):
-            await query.edit_message_text(
+            await safe_edit(query, 
                 "🔑 This feature requires Enterprise plan."
             )
             return
-        await query.edit_message_text(
+        await safe_edit(query, 
             "🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):"
         )
         context.user_data["state"] = "GITHUB_SCAN"
@@ -832,7 +840,7 @@ async def button_handler(update, context):
             text=help_text,
             parse_mode="Markdown",
         )
-        await query.edit_message_text(
+        await safe_edit(query, 
             "🔮 Return to main menu:",
             reply_markup=main_menu(username == ADMIN_USERNAME),
         )
@@ -840,7 +848,7 @@ async def button_handler(update, context):
 
     # Contact admin
     if data == "contact_admin":
-        await query.edit_message_text(
+        await safe_edit(query, 
             "✅ Your message has been forwarded to the admin. They will contact you shortly."
         )
         try:
@@ -856,27 +864,27 @@ async def button_handler(update, context):
     if data == "admin_menu":
         if username != ADMIN_USERNAME:
             return
-        await query.edit_message_text("👑 Admin Panel:", reply_markup=admin_menu())
+        await safe_edit(query, "👑 Admin Panel:", reply_markup=admin_menu())
         return
 
     if data == "admin_adduser":
         if username != ADMIN_USERNAME:
             return
-        await query.edit_message_text("Enter client username (with @):")
+        await safe_edit(query, "Enter client username (with @):")
         context.user_data["state"] = "ADDUSER_USERNAME"
         return
 
     if data == "admin_verify":
         if username != ADMIN_USERNAME:
             return
-        await query.edit_message_text("Enter client username (with @):")
+        await safe_edit(query, "Enter client username (with @):")
         context.user_data["state"] = "VERIFY_USERNAME"
         return
 
     if data == "admin_removeuser":
         if username != ADMIN_USERNAME:
             return
-        await query.edit_message_text(
+        await safe_edit(query, 
             "Enter the username of the client to remove (with @):"
         )
         context.user_data["state"] = "REMOVE_USER"
