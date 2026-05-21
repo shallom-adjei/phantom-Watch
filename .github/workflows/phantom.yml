@@ -19,9 +19,9 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y nmap nikto whatweb git python3-pip curl
+          sudo apt-get install -y nmap nikto whatweb git python3-pip curl fonts-dejavu-core
 
-      - name: Install Python tools (pip)
+      - name: Install Python tools (pip) system-wide
         run: |
           sudo pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog
 
@@ -29,9 +29,6 @@ jobs:
         run: |
           sudo python3 -m playwright install-deps
           python3 -m playwright install chromium
-
-       - name: Install DejaVu fonts (system)
-         run: sudo apt-get install -y fonts-dejavu-core
 
       - name: Clone metagoofil
         run: git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
@@ -47,3 +44,4 @@ jobs:
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           HIBP_API_KEY: ${{ secrets.HIBP_API_KEY }}
         run: python3 phantomwatch.py
+# Phantom Watch workflow
