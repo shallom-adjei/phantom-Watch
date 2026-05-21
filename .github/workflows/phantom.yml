@@ -30,11 +30,8 @@ jobs:
           sudo python3 -m playwright install-deps
           python3 -m playwright install chromium
 
-      - name: Download DejaVu Sans fonts (regular + bold) locally
-        run: |
-          mkdir -p fonts
-          wget -q -O fonts/DejaVuSans.ttf https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf
-          wget -q -O fonts/DejaVuSans-Bold.ttf https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf
+       - name: Install DejaVu fonts (system)
+         run: sudo apt-get install -y fonts-dejavu-core
 
       - name: Clone metagoofil
         run: git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil

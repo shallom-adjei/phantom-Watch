@@ -268,9 +268,6 @@ def generate_pdf_report(domain: str, results: dict, plan: str) -> io.BytesIO:
     pdf.add_page()
 
          # Register DejaVu Sans (Unicode) – regular and bold
-    regular_path = "fonts/DejaVuSans.ttf"
-    bold_path    = "fonts/DejaVuSans-Bold.ttf"
-    if not os.path.exists(regular_path):
         regular_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
     if not os.path.exists(bold_path):
         bold_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
