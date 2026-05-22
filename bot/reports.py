@@ -1,4 +1,4 @@
-"""Report generator that returns structured sections instead of one string."""
+"""Single‑message report with multiple code blocks."""
 import re
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -62,61 +62,55 @@ def compute_threat_score(results):
 def clean_ansi(text):
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
-def build_report_parts(domain, results, detailed=False):
-    """Return a list of (text, parse_mode, caption_hint) messages to send."""
-    parts = []
+def build_report_markdown(domain, results, detailed=False):
+    """Return a single Markdown string containing all report parts."""
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
 
-    # Header (plain text, no Markdown)
-    header = (
-        f"🔍 Scan completed for {domain}\n"
-        f"{risk_emoji} Threat Score: {score}/100  |  Risk Level: {level}\n"
-        "━━━━━━━━━━━━━━━━━━"
-    )
-    parts.append((header, None))  # no parse_mode
+    lines = []
+
+    # Header (no Markdown required, but we can use plain text with emojis)
+    lines.append(f"🔍 Scan completed for {domain}")
+    lines.append(f"{risk_emoji} Threat Score: {score}/100  |  Risk Level: {level}")
+    lines.append("━━━━━━━━━━━━━━━━━━")
 
     # Compact summary
-    summary_lines = []
     if 'nmap' in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap",""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap","")))
-        summary_lines.append(f"🛡️ Nmap: {ports} open ports, {vulns} potential vulns")
+        lines.append(f"🛡️ Nmap: {ports} open ports, {vulns} potential vulns")
     if 'nikto' in results:
         issues = len(re.findall(r"\+ (.*)", results.get("nikto","")))
-        summary_lines.append(f"🔥 Nikto: {issues} web issues")
+        lines.append(f"🔥 Nikto: {issues} web issues")
     if 'whatweb' in results:
         clean = re.sub(r"\x1b\[[0-9;]*m", "", results.get("whatweb",""))
         servers = re.findall(r"HTTPServer\[ (.*?) \]", clean)
-        summary_lines.append(f"🧩 Technology: {servers[0] if servers else 'No server header'}")
+        lines.append(f"🧩 Technology: {servers[0] if servers else 'No server header'}")
     if 'theHarvester' in results:
         harvest = results["theHarvester"]
         if harvest == "No email":
-            summary_lines.append("📧 theHarvester: No email set – skipped.")
+            lines.append("📧 theHarvester: No email set – skipped.")
         elif "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-            summary_lines.append(f"📧 theHarvester: {len(emails)} leaked emails found")
+            lines.append(f"📧 theHarvester: {len(emails)} leaked emails found")
     if 'dnstwist' in results:
         registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get("dnstwist",""), re.MULTILINE))
-        summary_lines.append(f"🕵️ dnstwist: {registered} typosquatting domains registered")
+        lines.append(f"🕵️ dnstwist: {registered} typosquatting domains registered")
     if 'metagoofil' in results:
         if "No metadata" in results.get("metagoofil",""):
-            summary_lines.append("📄 Metagoofil: No metadata leaks")
+            lines.append("📄 Metagoofil: No metadata leaks")
         else:
-            summary_lines.append("📄 Metagoofil: Metadata leaks found")
+            lines.append("📄 Metagoofil: Metadata leaks found")
     if 'sherlock' in results:
         found = len(re.findall(r"\[\+\] (.*)", results.get("sherlock","")))
-        summary_lines.append(f"👥 Sherlock: {found} social accounts found")
+        lines.append(f"👥 Sherlock: {found} social accounts found")
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
-        summary_lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
+        lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
 
-    parts.append(("\n".join(summary_lines), None))
-
+    # For paid users, append detailed code blocks
     if detailed:
-        # Send a notice that detailed report follows
-        parts.append(("📋 DETAILED PAID REPORT", None))
+        lines.append("")  # blank line before detailed section
 
-        # For each tool, create a separate code block message
         tools = [
             ("🛡️ Nmap", 'nmap'),
             ("🔥 Nikto", 'nikto'),
@@ -132,10 +126,15 @@ def build_report_parts(domain, results, detailed=False):
                 raw = clean_ansi(results[key])
                 if key == "theHarvester" and raw in ("No email", "No results"):
                     continue
-                # Sanitise triple backticks inside content
+                # Sanitize triple backticks inside content
                 safe = raw.replace("```", "'''")
-                block = f"```\n{safe[:800]}\n```"
-                parts.append((f"\n{label}\n{block}", "Markdown"))
+                # Truncate to save space (300 chars)
+                snippet = safe[:300]
+                lines.append(label)
+                lines.append("```")
+                lines.append(snippet)
+                lines.append("```")
+                lines.append("")  # spacing
 
         # Compliance table as a code block
         compliance_lines = ["COMPLIANCE STATUS"]
@@ -156,11 +155,13 @@ def build_report_parts(domain, results, detailed=False):
             elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")):
                 status = "❌"
             compliance_lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
-        compliance_block = "\n```\n" + "\n".join(compliance_lines) + "\n```"
-        parts.append((compliance_block, "Markdown"))
-        parts.append(("⚠️ For full compliance documentation, contact admin.", None))
+        lines.append("```")
+        lines.extend(compliance_lines)
+        lines.append("```")
+        lines.append("")
+        lines.append("⚠️ For full compliance documentation, contact admin.")
     else:
-        parts.append(("", None))
-        parts.append((f"⚠️ This is a FREE summary. Upgrade for detailed reports.\nContact admin: @{ADMIN_USERNAME}", None))
+        lines.append("")
+        lines.append(f"⚠️ This is a FREE summary. Upgrade for detailed reports.\nContact admin: @{ADMIN_USERNAME}")
 
-    return parts
+    return "\n".join(lines)

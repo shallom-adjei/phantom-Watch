@@ -435,19 +435,14 @@ async def handle_scan_domain(update, context):
 
         print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
         try:
-            parts = build_report_parts(domain, results, detailed)
-            print(f"[DEBUG] Got {len(parts)} report parts")
-            for text, parse_mode in parts:
-                if parse_mode:
-                    await context.bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode)
-                else:
-                    await context.bot.send_message(chat_id=chat_id, text=text)
-            print(f"[DEBUG] All parts sent successfully")
+            from bot.reports import build_report_markdown
+            report_md = build_report_markdown(domain, results, detailed)
+            await context.bot.send_message(chat_id=chat_id, text=report_md, parse_mode="Markdown")
+            print(f"[DEBUG] Single message report sent")
         except Exception as e:
             import traceback
             traceback.print_exc()
             await context.bot.send_message(chat_id=chat_id, text=f"❌ Report delivery failed: {e}")
-
         if plan == "free":
             c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
             conn.commit()
