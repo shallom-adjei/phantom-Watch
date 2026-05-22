@@ -138,7 +138,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
         if progress_callback:
             progress_callback(f"⚡ [{step}/7] Running {tool}...")
         if tool == "nmap":
-            results["nmap"] = run_command(["nmap", "-sV", "-T4", "--top-ports", "1000", "--script", "vuln", domain], timeout=300)
+            results["nmap"] = run_command(["nmap", "-sV", "-T4", "--top-ports", "200", domain], timeout=180)
         elif tool == "nikto":
             results["nikto"] = run_command(["nikto", "-h", domain, "-T", "0123456789abcde", "-maxtime", "300s"], timeout=300)
         elif tool == "whatweb":
@@ -155,7 +155,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
             else:
                 results["theHarvester"] = "No email"
         elif tool == "dnstwist":
-            results["dnstwist"] = run_command(["dnstwist", domain])
+            results["dnstwist"] = run_command(["dnstwist", "--registered", domain], timeout=120)
         elif tool == "metagoofil":
             raw = run_command(["python3", "/home/runner/metagoofil/metagoofil.py", "-d", domain, "-t", "pdf,doc,xls", "-l", "20", "-n", "10", "-o", f"/tmp/meta_{domain}", "-f", f"meta_{domain}.html"], timeout=300)
             meta_report = f"/tmp/meta_{domain}/meta_{domain}.html"
