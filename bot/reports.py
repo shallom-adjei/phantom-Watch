@@ -135,7 +135,7 @@ def build_report_parts(domain, results, detailed=False):
                 # Sanitise triple backticks inside content
                 safe = raw.replace("```", "'''")
                 block = f"```\n{safe[:800]}\n```"
-                parts.append((f"{label}\n{block}", "Markdown"))
+                parts.append((f"\n{label}\n{block}", "Markdown"))
 
         # Compliance table as a code block
         compliance_lines = ["COMPLIANCE STATUS"]
@@ -156,7 +156,7 @@ def build_report_parts(domain, results, detailed=False):
             elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")):
                 status = "❌"
             compliance_lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
-        compliance_block = "```\n" + "\n".join(compliance_lines) + "\n```"
+        compliance_block = "\n```\n" + "\n".join(compliance_lines) + "\n```"
         parts.append((compliance_block, "Markdown"))
         parts.append(("⚠️ For full compliance documentation, contact admin.", None))
     else:

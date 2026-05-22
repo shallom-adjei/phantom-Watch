@@ -5,7 +5,7 @@ import requests
 from bot.database import is_active, is_client, generate_token, verify_domain, conn, c
 from bot.config import ADMIN_USERNAME
 from bot.scanners import run_scan
-from bot.reports import format_summary
+from bot.reports import build_report_parts
 from bot.menus import main_menu, admin_menu
 
 # ---------- safe message editing ----------
