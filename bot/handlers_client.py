@@ -436,10 +436,12 @@ async def handle_scan_domain(update, context):
             summary = format_summary(domain, results, detailed)
             await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
         except Exception as e:
-            import traceback
             print(f"[ERROR] Failed to send report: {e}")
-            traceback.print_exc()
-            await context.bot.send_message(chat_id=chat_id, text="⚠️ Report generation failed. Please contact admin.")
+            try:
+                # Fallback: send without Markdown parsing
+                await context.bot.send_message(chat_id=chat_id, text=summary)
+            except:
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ Report generation failed. Please contact admin.")
         if plan == "free":
             c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
             conn.commit()
