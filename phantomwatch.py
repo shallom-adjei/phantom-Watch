@@ -155,7 +155,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
             else:
                 results["theHarvester"] = "No email"
         elif tool == "dnstwist":
-            results["dnstwist"] = run_command(["dnstwist", "--registered", domain], timeout=120)
+            results["dnstwist"] = run_command(["dnstwist", domain], timeout=120)
         elif tool == "metagoofil":
             raw = run_command(["python3", "/home/runner/metagoofil/metagoofil.py", "-d", domain, "-t", "pdf,doc,xls", "-l", "20", "-n", "10", "-o", f"/tmp/meta_{domain}", "-f", f"meta_{domain}.html"], timeout=300)
             meta_report = f"/tmp/meta_{domain}/meta_{domain}.html"
