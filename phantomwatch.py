@@ -934,7 +934,7 @@ async def button_handler(update, context):
 
             if "Message is not modified" not in str(e):
 
-                print(f"Edit error: {e}"):"
+                print(f"Edit error: {e}")
         )
         context.user_data["state"] = "GITHUB_SCAN"
         return
