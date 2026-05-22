@@ -899,6 +899,30 @@ async def message_handler(update, context):
         context.user_data.pop("state", None)
         context.user_data.pop("verify_target", None)
         return
+    # ----- ADMIN VERIFY DOMAIN -----
+    if state == "VERIFY_USERNAME":
+        if username != ADMIN_USERNAME:
+            await update.message.reply_text("❌ Admin only.")
+            return
+        target = text.lstrip("@")
+        if not is_client(target):
+            await update.message.reply_text("User not a client.")
+            return
+        context.user_data["verify_target"] = target
+        await update.message.reply_text("Domain to verify (e.g., example.com):")
+        context.user_data["state"] = "VERIFY_DOMAIN"
+        return
+
+    if state == "VERIFY_DOMAIN":
+        target = context.user_data["verify_target"]
+        domain = text.lower()
+        c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (target, domain, "admin_verified"))
+        conn.commit()
+        await update.message.reply_text(f"✅ Domain {domain} verified for @{target}.", reply_markup=admin_menu())
+        context.user_data.pop("state", None)
+        context.user_data.pop("verify_target", None)
+        return
+
 
     if state == "SCAN_DOMAIN":
         domain = text.lower()
