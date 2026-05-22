@@ -476,46 +476,42 @@ async def button_handler(update, context):
         context.user_data["state"] = "SET_EMAIL"
         return
 
-if data == "pricing":
-    pricing_text = (
-        "💲 *Phantom Watch Pricing Plans*\n"
-        "━━━━━━━━━━━━━━━\n\n"
-
-        "🆓 *Free Trial — 7 Days*\n"
-        "   Perfect for testing the platform\n\n"
-        "   ✔ One full security scan\n"
-        "   ✔ Basic findings summary\n"
-        "   ✔ Exposure & vulnerability overview\n"
-        "   ✔ Limited reporting features\n\n"
-        "   💵 *Price:* Free\n\n"
-
-        "🛡️ *Monthly Plan — $199/month*\n"
-        "   Designed for growing businesses\n\n"
-        "   ✔ Unlimited full scans\n"
-        "   ✔ Professional PDF reports\n"
-        "   ✔ Compliance mapping\n"
-        "   ✔ Breach intelligence monitoring\n"
-        "   ✔ Weekly automated scans\n"
-        "   ✔ Continuous exposure tracking\n"
-        "   ✔ Priority vulnerability alerts\n\n"
-        "   💵 *Price:* $199/month\n\n"
-
-        "👑 *Enterprise Plan — $2,000/month*\n"
-        "   Advanced protection for organizations\n\n"
-        "   ✔ Everything in Monthly Plan\n"
-        "   ✔ Exploitation proof screenshots\n"
-        "   ✔ Continuous CVE monitoring\n"
-        "   ✔ GitHub secret scanning\n"
-        "   ✔ Advanced OSINT intelligence\n"
-        "   ✔ Priority support & escalation\n"
-        "   ✔ Dedicated monitoring workflows\n"
-        "   ✔ Enhanced reporting & analytics\n\n"
-        "   💵 *Price:* $2,000/month\n\n"
-
-        "━━━━━━━━━━━━━━━\n"
-        "📩 *Need Access or an Upgrade?*\n"
-        "Contact the admin to activate your plan."
-            )
+    if data == "pricing":
+        pricing_text = (
+            "💲 *Phantom Watch Pricing Plans*\n"
+            "━━━━━━━━━━━━━━━\n\n"
+            "🆓 *Free Trial — 7 Days*\n"
+            "   Perfect for testing the platform\n\n"
+            "   ✔ One full security scan\n"
+            "   ✔ Basic findings summary\n"
+            "   ✔ Exposure & vulnerability overview\n"
+            "   ✔ Limited reporting features\n\n"
+            "   💵 *Price:* Free\n\n"
+            "🛡️ *Monthly Plan — $199/month*\n"
+            "   Designed for growing businesses\n\n"
+            "   ✔ Unlimited full scans\n"
+            "   ✔ Professional PDF reports\n"
+            "   ✔ Compliance mapping\n"
+            "   ✔ Breach intelligence monitoring\n"
+            "   ✔ Weekly automated scans\n"
+            "   ✔ Continuous exposure tracking\n"
+            "   ✔ Priority vulnerability alerts\n\n"
+            "   💵 *Price:* $199/month\n\n"
+            "👑 *Enterprise Plan — $2,000/month*\n"
+            "   Advanced protection for organizations\n\n"
+            "   ✔ Everything in Monthly Plan\n"
+            "   ✔ Exploitation proof screenshots\n"
+            "   ✔ Continuous CVE monitoring\n"
+            "   ✔ GitHub secret scanning\n"
+            "   ✔ Advanced OSINT intelligence\n"
+            "   ✔ Priority support & escalation\n"
+            "   ✔ Dedicated monitoring workflows\n"
+            "   ✔ Enhanced reporting & analytics\n\n"
+            "   💵 *Price:* $2,000/month\n\n"
+            "━━━━━━━━━━━━━━━\n"
+            "📩 *Need Access or an Upgrade?*\n"
+            "Contact the admin to activate your plan."
+        )
         await context.bot.send_message(chat_id=query.message.chat_id, text=pricing_text, parse_mode="Markdown")
         try:
             await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
@@ -524,49 +520,42 @@ if data == "pricing":
                 print(f"Edit error: {e}")
         return
 
-if data == "how_it_works":
-    how_text = (
-        "📖 *How Phantom Watch Works*\n"
-        "━━━━━━━━━━━━━━━\n\n"
-
-        "1️⃣ *Registration & Verification*\n"
-        "   └ Your organization is added by the admin\n"
-        "   └ Domain ownership is verified securely\n"
-        "   └ Scanning scope is configured\n\n"
-
-        "2️⃣ *Choose Your Scan Type*\n"
-        "   └ ⚡ *Quick Scan* → Fast exposure checks\n"
-        "   └ 🛡 *Full Scan* → Deep vulnerability assessment\n"
-        "   └ Targets can include domains, subdomains,\n"
-        "      web apps, and public assets\n\n"
-
-        "3️⃣ *Automated Security Analysis*\n"
-        "   └ Port & service discovery\n"
-        "   └ Website technology detection\n"
-        "   └ Vulnerability identification\n"
-        "   └ Breach & leaked credential checks\n"
-        "   └ GitHub secret exposure scanning\n\n"
-
-        "4️⃣ *Live Monitoring & Alerts*\n"
-        "   └ Critical findings are reported instantly\n"
-        "   └ High-risk exposures are prioritized\n"
-        "   └ Continuous tracking for new threats\n\n"
-
-        "5️⃣ *Professional Reporting*\n"
-        "   └ Detailed PDF security reports\n"
-        "   └ Compliance mapping included\n"
-        "   └ Clear remediation recommendations\n"
-        "   └ Executive-friendly summaries\n\n"
-
-        "6️⃣ *Continuous Protection*\n"
-        "   └ Weekly or scheduled scans\n"
-        "   └ Ongoing breach monitoring\n"
-        "   └ Long-term security visibility\n\n"
-
-        "━━━━━━━━━━━━━━━\n"
-        "💡 *Enterprise Features*\n"
-        "Exploitation proof • Advanced OSINT • GitHub secret scanning • Priority monitoring"
-            )
+    if data == "how_it_works":
+        how_text = (
+            "📖 *How Phantom Watch Works*\n"
+            "━━━━━━━━━━━━━━━\n\n"
+            "1️ *Registration & Verification*\n"
+            "   └ Your organization is added by the admin\n"
+            "   └ Domain ownership is verified securely\n"
+            "   └ Scanning scope is configured\n\n"
+            "2️ *Choose Your Scan Type*\n"
+            "   └ ⚡ *Quick Scan* → Fast exposure checks\n"
+            "   └ 🛡 *Full Scan* → Deep vulnerability assessment\n"
+            "   └ Targets can include domains, subdomains,\n"
+            "      web apps, and public assets\n\n"
+            "3️ *Automated Security Analysis*\n"
+            "   └ Port & service discovery\n"
+            "   └ Website technology detection\n"
+            "   └ Vulnerability identification\n"
+            "   └ Breach & leaked credential checks\n"
+            "   └ GitHub secret exposure scanning\n\n"
+            "4️ *Live Monitoring & Alerts*\n"
+            "   └ Critical findings are reported instantly\n"
+            "   └ High-risk exposures are prioritized\n"
+            "   └ Continuous tracking for new threats\n\n"
+            "5️ *Professional Reporting*\n"
+            "   └ Detailed PDF security reports\n"
+            "   └ Compliance mapping included\n"
+            "   └ Clear remediation recommendations\n"
+            "   └ Executive-friendly summaries\n\n"
+            "6️ *Continuous Protection*\n"
+            "   └ Weekly or scheduled scans\n"
+            "   └ Ongoing breach monitoring\n"
+            "   └ Long-term security visibility\n\n"
+            "━━━━━━━━━━━━━━━\n"
+            "💡 *Enterprise Features*\n"
+            "Exploitation proof • Advanced OSINT • GitHub secret scanning • Priority monitoring"
+        )
         await context.bot.send_message(chat_id=query.message.chat_id, text=how_text, parse_mode="Markdown")
         try:
             await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
@@ -617,58 +606,16 @@ if data == "how_it_works":
         help_text = (
             "🛠 *Security Toolkit*\n"
             "━━━━━━━━━━━━━━━\n\n"
-
-
-            "⚡ *Nmap*\n"
-
-            "   └ Ports & vulnerability discovery\n\n"
-
-
-            "🕵️ *Nikto*\n"
-
-            "   └ Web server vulnerability scanning\n\n"
-
-
-            "🔎 *WhatWeb*\n"
-
-            "   └ Website technology fingerprinting\n\n"
-
-
-            "📧 *theHarvester*\n"
-
-            "   └ Email & OSINT collection\n\n"
-
-
-            "🔄 *dnstwist*\n"
-
-            "   └ Detect fake / typosquatted domains\n\n"
-
-
-            "📄 *Metagoofil*\n"
-
-            "   └ Extract metadata from public files\n\n"
-
-
-            "👤 *Sherlock*\n"
-
-            "   └ Social media username tracking\n\n"
-
-
-            "🦠 *Dalfox*\n"
-
-            "   └ Automated XSS scanning\n\n"
-
-
-            "🩸 *Check Breaches*\n"
-
-            "   └ Email breach lookup\n\n"
-
-
-            "🔑 *GitHub Scan*\n"
-
-            "   └ Detect exposed secrets & keys\n\n"
-
-
+            "⚡ *Nmap*\n   └ Ports & vulnerability discovery\n\n"
+            "🕵️ *Nikto*\n   └ Web server vulnerability scanning\n\n"
+            "🔎 *WhatWeb*\n   └ Website technology fingerprinting\n\n"
+            "📧 *theHarvester*\n   └ Email & OSINT collection\n\n"
+            "🔄 *dnstwist*\n   └ Detect fake / typosquatted domains\n\n"
+            "📄 *Metagoofil*\n   └ Extract metadata from public files\n\n"
+            "👤 *Sherlock*\n   └ Social media username tracking\n\n"
+            "🦠 *Dalfox*\n   └ Automated XSS scanning\n\n"
+            "🩸 *Check Breaches*\n   └ Email breach lookup\n\n"
+            "🔑 *GitHub Scan*\n   └ Detect exposed secrets & keys\n\n"
             "━━━━━━━━━━━━━━━\n"
             "🚀 *Upgrade Available*\n"
             "PDF reports • Compliance mapping • Advanced scans"
@@ -736,7 +683,6 @@ if data == "how_it_works":
                 print(f"Edit error: {e}")
         context.user_data["state"] = "REMOVE_USER"
         return
-
 
 async def message_handler(update, context):
     username = update.message.from_user.username
