@@ -159,9 +159,9 @@ def format_summary(domain, results, detailed=False):
             status = "✅"
             if category == "xss" and "dalfox" in results and "vulnerable" in results.get("dalfox", "").lower():
                 status = "❌"
-            elif category == "open_port" and any("open" in str(results.get("nmap", ""))):
+            elif category == "open_port" and "open" in str(results.get("nmap", "")):
                 status = "❌"
-            elif category == "vulnerable_service" and any("VULNERABLE" in str(results.get("nmap", ""))):
+            elif category == "vulnerable_service" and "VULNERABLE" in str(results.get("nmap", "")):
                 status = "❌"
             elif category == "leaked_email" and "theHarvester" in results and "Leaked" in str(results.get("theHarvester", "")):
                 status = "❌"
