@@ -32,4 +32,5 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-        run: python3 phantomwatch.py
+          HIBP_API_KEY: ${{ secrets.HIBP_API_KEY }}
+        run: python3 -m bot.main
