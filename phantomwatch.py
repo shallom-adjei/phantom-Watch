@@ -40,19 +40,29 @@ c.execute("""CREATE TABLE IF NOT EXISTS subscriptions (
 )""")
 conn.commit()
 
+# Ensure scan_used column exists
+try:
+    c.execute("ALTER TABLE clients ADD COLUMN scan_used INTEGER DEFAULT 0")
+except:
+    pass
+
 # ---------- Helpers ----------
 def is_client(username: str) -> bool:
     c.execute("SELECT 1 FROM clients WHERE username=?", (username,))
     return c.fetchone() is not None
 
 def is_active(username: str) -> bool:
-    c.execute("SELECT plan, expiry FROM clients WHERE username=?", (username,))
+    c.execute("SELECT plan, expiry, scan_used FROM clients WHERE username=?", (username,))
     row = c.fetchone()
     if not row:
         return False
-    plan, expiry = row
-    if plan == "free" and expiry and expiry < datetime.now().strftime("%Y-%m-%d"):
-        return False
+    plan, expiry, scan_used = row
+    if plan == "free":
+        if scan_used:
+            return False  # free trial already used
+        if expiry and expiry < datetime.now().strftime("%Y-%m-%d"):
+            return False
+        return True
     if expiry and expiry < datetime.now().strftime("%Y-%m-%d"):
         return False
     return True
@@ -295,7 +305,7 @@ def format_summary(domain, results):
     else:
         lines.append("👥 *Sherlock*: Not run.")
     lines.append("")
-    lines.append("⚠️ Upgrade to Monthly/Enterprise for full PDF reports & compliance mapping.")
+    lines.append("⚠️ This is a FREE summary. Upgrade to Monthly/Enterprise for detailed PDF reports with compliance mapping and exploitation proof.")
     return "\n".join(lines)
 def generate_pdf_report(domain, results, plan):
     pdf = FPDF()
@@ -700,15 +710,15 @@ async def button_handler(update, context):
         return
 
     if data == "contact_admin":
+        admin_link = f"https://t.me/{ADMIN_USERNAME}"
+        msg = f"📩 Contact the admin directly: @{ADMIN_USERNAME}
+
+👉 {admin_link}"
         try:
-            await query.edit_message_text("✅ Your message has been forwarded to the admin. They will contact you shortly.")
+            await query.edit_message_text(msg)
         except Exception as e:
             if "Message is not modified" not in str(e):
                 print(f"Edit error: {e}")
-        try:
-            await context.bot.send_message(chat_id=f"@{ADMIN_USERNAME}", text=f"📩 Client @{username} wants to get in touch.")
-        except:
-            pass
         return
 
     # Admin
