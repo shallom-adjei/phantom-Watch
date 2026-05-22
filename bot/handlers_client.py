@@ -61,7 +61,10 @@ async def start_command(update, context):
 
 async def scan_full_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if not is_active(username):
         await query.edit_message_text("⛔ Not authorized or trial expired.")
@@ -78,7 +81,10 @@ async def scan_full_handler(update, context):
 
 async def scan_quick_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if not is_active(username):
         await query.edit_message_text("⛔ Not authorized or trial expired.")
@@ -92,7 +98,10 @@ async def scan_quick_handler(update, context):
 
 async def quick_scan_subhandler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     data = query.data
     username = query.from_user.username
     if not is_active(username):
@@ -118,7 +127,10 @@ async def quick_scan_subhandler(update, context):
 
 async def set_email_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     try:
         await query.edit_message_text("📧 Please send your email address:")
     except Exception as e:
@@ -128,7 +140,10 @@ async def set_email_handler(update, context):
 
 async def pricing_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     pricing_text = (
         "💲 *Phantom Watch Pricing Plans*\n"
         "━━━━━━━━━━━━━━━\n\n"
@@ -173,7 +188,10 @@ async def pricing_handler(update, context):
 
 async def how_it_works_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     how_text = (
         "📖 *How Phantom Watch Works*\n"
         "━━━━━━━━━━━━━━━\n\n"
@@ -218,7 +236,10 @@ async def how_it_works_handler(update, context):
 
 async def check_breaches_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if not is_active(username):
         await query.edit_message_text("⛔ Not authorized or trial expired.")
@@ -234,7 +255,10 @@ async def check_breaches_handler(update, context):
 
 async def subscribe_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if not is_active(username):
         await query.edit_message_text("⛔ Not authorized or trial expired.")
@@ -248,7 +272,10 @@ async def subscribe_handler(update, context):
 
 async def github_scan_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if not is_client(username):
         await query.edit_message_text("🔑 This feature requires Enterprise plan.")
@@ -262,7 +289,10 @@ async def github_scan_handler(update, context):
 
 async def help_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     help_text = (
         "🛠 *Security Toolkit*\n"
         "━━━━━━━━━━━━━━━\n\n"
@@ -289,7 +319,10 @@ async def help_handler(update, context):
 
 async def contact_admin_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     msg = f"📩 Contact the admin directly: @{ADMIN_USERNAME}\n\n👉 https://t.me/{ADMIN_USERNAME}"
     try:
@@ -300,7 +333,10 @@ async def contact_admin_handler(update, context):
 
 async def main_menu_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     try:
         await query.edit_message_text("⬇️ Main Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))

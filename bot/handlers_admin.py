@@ -5,7 +5,10 @@ from bot.menus import admin_menu, main_menu
 
 async def admin_menu_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if username != ADMIN_USERNAME:
         return
@@ -17,7 +20,10 @@ async def admin_menu_handler(update, context):
 
 async def admin_adduser_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if username != ADMIN_USERNAME:
         return
@@ -30,7 +36,10 @@ async def admin_adduser_handler(update, context):
 
 async def admin_verify_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if username != ADMIN_USERNAME:
         return
@@ -43,7 +52,10 @@ async def admin_verify_handler(update, context):
 
 async def admin_status_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if username != ADMIN_USERNAME:
         return
@@ -63,7 +75,10 @@ async def admin_status_handler(update, context):
 
 async def admin_removeuser_handler(update, context):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except:
+        pass
     username = query.from_user.username
     if username != ADMIN_USERNAME:
         return
