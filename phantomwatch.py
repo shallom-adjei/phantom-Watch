@@ -225,7 +225,6 @@ def format_summary(domain, results):
         f"{risk_emoji} Threat Score: *{score}/100*  |  Risk Level: *{level}*\n",
         "━━━━━━━━━━━━━━━━━━"
     ]
-    # Nmap
     if "nmap" in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap", ""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap", "")))
@@ -235,7 +234,6 @@ def format_summary(domain, results):
             lines.append("🛡️ *Nmap*: No open ports or vulns found.")
     else:
         lines.append("🛡️ *Nmap*: Not run.")
-    # Nikto
     if "nikto" in results:
         issues = len(re.findall(r"\+ (.*)", results.get("nikto", "")))
         if issues:
@@ -244,7 +242,6 @@ def format_summary(domain, results):
             lines.append("🔥 *Nikto*: No web issues found.")
     else:
         lines.append("🔥 *Nikto*: Not run.")
-    # WhatWeb
     if "whatweb" in results:
         clean = re.sub(r"\x1b\[[0-9;]*m", "", results.get("whatweb", ""))
         servers = re.findall(r"HTTPServer\[ (.*?) \]", clean)
@@ -254,7 +251,6 @@ def format_summary(domain, results):
             lines.append("🧩 *Technology*: No server header detected.")
     else:
         lines.append("🧩 *Technology*: Not run.")
-    # theHarvester
     if "theHarvester" in results:
         harvest = results["theHarvester"]
         if harvest == "No email":
@@ -269,7 +265,6 @@ def format_summary(domain, results):
             lines.append("📧 *theHarvester*: No results.")
     else:
         lines.append("📧 *theHarvester*: Not run.")
-    # dnstwist
     if "dnstwist" in results:
         registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get("dnstwist", ""), re.MULTILINE))
         if registered:
@@ -278,7 +273,6 @@ def format_summary(domain, results):
             lines.append("🕵️ *dnstwist*: No similar domains registered.")
     else:
         lines.append("🕵️ *dnstwist*: Not run.")
-    # Metagoofil
     if "metagoofil" in results:
         if "No metadata" in results.get("metagoofil", ""):
             lines.append("📄 *Metagoofil*: No metadata leaks found.")
@@ -286,7 +280,6 @@ def format_summary(domain, results):
             lines.append("📄 *Metagoofil*: Document metadata leaks found")
     else:
         lines.append("📄 *Metagoofil*: Not run.")
-    # Sherlock
     if "sherlock" in results:
         found = len(re.findall(r"\[\+\] (.*)", results.get("sherlock", "")))
         if found:
@@ -416,6 +409,11 @@ def generate_pdf_report(domain, results, plan):
     pdf.output(buf)
     buf.seek(0)
     return buf
+
+
+# ---------- Menus ----------
+menu_button = ReplyKeyboardMarkup([[KeyboardButton("🛡️ Menu")]], resize_keyboard=True)
+
 def main_menu(admin=False):
     buttons = [
         [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full"),
@@ -454,7 +452,6 @@ def quick_scan_menu():
 
 # ---------- Handlers ----------
 async def start(update, context):
-    # Send persistent menu button
     await update.message.reply_text(
         "Tap the *🛡️ Menu* button below anytime to bring up options.",
         reply_markup=menu_button,
@@ -777,7 +774,6 @@ async def message_handler(update, context):
     text = update.message.text.strip()
     state = context.user_data.get("state")
 
-    # Persistent menu button
     if text == "🛡️ Menu":
         await update.message.reply_text("Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
         return
@@ -880,7 +876,6 @@ async def message_handler(update, context):
             context.user_data.pop(k, None)
         return
 
-    # ----- ADMIN VERIFY DOMAIN -----
     if state == "VERIFY_USERNAME":
         if username != ADMIN_USERNAME:
             await update.message.reply_text("❌ Admin only.")
@@ -969,7 +964,7 @@ async def message_handler(update, context):
                 c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
                 conn.commit()
 
-            # PDF for monthly/enterprise
+            # PDF for monthly/enterprise ONLY
             if plan in ("monthly", "enterprise"):
                 try:
                     pdf_buf = generate_pdf_report(domain, results, plan)
@@ -986,7 +981,6 @@ async def message_handler(update, context):
         await update.message.reply_text("🔮 What's next?", reply_markup=main_menu(username == ADMIN_USERNAME))
         return
 
-    # Fallback
     await update.message.reply_text("I didn't understand. Use the buttons below.", reply_markup=main_menu(username == ADMIN_USERNAME))
 
 
