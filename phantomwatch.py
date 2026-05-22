@@ -455,38 +455,31 @@ def quick_scan_menu():
 
 # ---------- Handlers ----------
 async def start(update, context):
+    # Send the persistent menu button NEXT to the text field
+    await update.message.reply_text(
+        "Tap the *🛡️ Menu* button below anytime to bring up options.",
+        reply_markup=menu_button,
+        parse_mode="Markdown",
+    )
+    # Now send the inline menu
     await update.message.reply_text(
         "🔮 *PHANTOM WATCH*\n"
         "_Elite Digital Reconnaissance & Threat Intelligence_\n"
         "━━━━━━━━━━━━━━━\n\n"
-
         "⚠️ Attackers scan the internet every second.\n"
         "The only question is whether they find your weaknesses first.\n\n"
-
         "🛡 *PHANTOM WATCH* is an advanced cybersecurity platform "
         "built to uncover hidden exposures, leaked intelligence, "
         "and critical vulnerabilities before they become breaches.\n\n"
-
-
         "━━━━━━━━━━━━━━━\n"
         "🚨 *Detect Threats Before They Escalate*\n\n"
-
         "Identify critical risks.\n"
         "Monitor your digital footprint.\n"
         "Protect your organization with continuous reconnaissance.\n\n"
-
         "👇 Access the control panel below.",
+        reply_markup=main_menu(update.message.from_user.username == ADMIN_USERNAME),
         parse_mode="Markdown",
     )
-
-    await update.message.reply_text(
-        "⬇️ *Main Menu*",
-        reply_markup=main_menu(
-            update.message.from_user.username == ADMIN_USERNAME
-        ),
-        parse_mode="Markdown",
-    )
-
 async def button_handler(update, context):
     query = update.callback_query
     await query.answer()
@@ -767,6 +760,10 @@ async def message_handler(update, context):
     username = update.message.from_user.username
     text = update.message.text.strip()
     state = context.user_data.get("state")
+    # Persistent menu button tap
+    if text == "🛡️ Menu":
+        await update.message.reply_text("Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
+        return
 
     if state == "SET_EMAIL":
         if "@" not in text:
