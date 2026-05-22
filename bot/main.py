@@ -11,7 +11,7 @@ from bot.handlers_admin import (
     admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
 )
 import os, asyncio
-from bot.config import BOT_TOKEN
+from bot.config import BOT_TOKEN, ADMIN_USERNAME
 from bot.menus import main_menu
 
 
@@ -43,25 +43,36 @@ async def button_router(update, context):
     handler = CALLBACK_ROUTES.get(data)
     if handler:
         await handler(update, context)
-
 async def message_router(update, context):
+    username = update.message.from_user.username
     state = context.user_data.get("state")
+
     # Admin wizards
-    if state in ("ADDUSER_USERNAME","ADDUSER_PLAN","ADDUSER_MONTHS","VERIFY_USERNAME","VERIFY_DOMAIN","REMOVE_USER"):
+    if state in ("ADDUSER_USERNAME", "ADDUSER_PLAN", "ADDUSER_MONTHS",
+                 "VERIFY_USERNAME", "VERIFY_DOMAIN", "REMOVE_USER"):
         handled = await handle_admin_wizard(update, context)
         if handled:
             return
+
     # Client states
     handled = await handle_client_message(update, context)
     if handled:
         return
+
     # Scan domain state
     if state == "SCAN_DOMAIN":
         handled = await handle_scan_domain(update, context)
         if handled:
             return
+
     # Fallback
-    await update.message.reply_text("I didn't understand. Use the buttons below.", reply_markup=main_menu(username == ADMIN_USERNAME))
+    try:
+        await update.message.reply_text(
+            "I didn't understand. Use the buttons below.",
+            reply_markup=main_menu(username == ADMIN_USERNAME)
+        )
+    except Exception as e:
+        print(f"Fallback error: {e}")
 
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
