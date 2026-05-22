@@ -112,7 +112,18 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
     results = {}
     for tool in tools:
         if progress_callback:
-            progress_callback(f"Running {tool}...")
+            step = { "nmap":1, "nikto":2, "whatweb":3, "theHarvester":4, "dnstwist":5, "metagoofil":6, "sherlock":7, "dalfox":8 }.get(tool, 0)
+            messages = {
+                1: "⚡ [1/7] Mapping infrastructure & ports...",
+                2: "🕵️ [2/7] Probing web server security...",
+                3: "🔎 [3/7] Fingerprinting technologies...",
+                4: "📧 [4/7] Harvesting public OSINT data...",
+                5: "🔄 [5/7] Hunting typosquatting domains...",
+                6: "📄 [6/7] Extracting document metadata...",
+                7: "👤 [7/7] Searching social media footprint...",
+                8: "🦠 [8/8] Scanning for XSS vulnerabilities..."
+            }
+            progress_callback(messages.get(step, f"Running {tool}..."))
         if tool == "nmap":
             results["nmap"] = run_command(["nmap", "-sV", "-T4", "--top-ports", "200", domain])
         elif tool == "nikto":
@@ -148,7 +159,12 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
 
 # ---------- Report formatters ----------
 def format_summary(domain, results):
-    lines = [f"🔍 *Scan completed for {domain}*\n"]
+    score, level = compute_threat_score(results)
+    risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
+    lines = [
+        f"🔍 *Scan completed for {domain}*",
+        f"{risk_emoji} Threat Score: *{score}/100*  |  Risk Level: *{level}*\n"
+    ]
     if "nmap" in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap", ""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap", "")))
