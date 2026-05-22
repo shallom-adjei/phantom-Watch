@@ -1,4 +1,4 @@
-"""Single‑message report with compact code blocks."""
+"""Professional report: brief summary for all, detailed code blocks for paid users."""
 import re
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -63,7 +63,7 @@ def clean_ansi(text):
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 def build_report_markdown(domain, results, detailed=False):
-    """Return a single Markdown string with compact code blocks."""
+    """Return a single Markdown string with brief summary and optional detailed section."""
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
 
@@ -74,7 +74,7 @@ def build_report_markdown(domain, results, detailed=False):
     lines.append(f"{risk_emoji} Threat Score: {score}/100  |  Risk Level: {level}")
     lines.append("━━━━━━━━━━━━━━━━━━")
 
-    # Compact summary
+    # Brief summary (for all users)
     if 'nmap' in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap",""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap","")))
@@ -107,8 +107,12 @@ def build_report_markdown(domain, results, detailed=False):
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
         lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
 
+    # For paid users, add a separated detailed section
     if detailed:
-        lines.append("")  # one blank line before detailed section
+        lines.append("")  # one blank line
+        lines.append("━━━━━━━━━━━━━━━━━━")
+        lines.append("📋 DETAILED PAID REPORT")
+        lines.append("━━━━━━━━━━━━━━━━━━")
 
         tools = [
             ("🛡️ Nmap", 'nmap'),
@@ -132,7 +136,7 @@ def build_report_markdown(domain, results, detailed=False):
                 lines.append(snippet)
                 lines.append("```")
 
-        # Compliance table in a code block
+        # Compliance table in its own code block
         compliance_lines = ["COMPLIANCE STATUS"]
         for category, rules in COMPLIANCE.items():
             status = "✅"
@@ -151,6 +155,8 @@ def build_report_markdown(domain, results, detailed=False):
             elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")):
                 status = "❌"
             compliance_lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
+        lines.append("")
+        lines.append("📜 Compliance")
         lines.append("```")
         lines.extend(compliance_lines)
         lines.append("```")
