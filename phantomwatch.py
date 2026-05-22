@@ -704,7 +704,6 @@ async def button_handler(update, context):
         return
 
     if data == "contact_admin":
-        admin_link = f"https://t.me/{ADMIN_USERNAME}"
         msg = f"📩 Contact the admin directly: @{ADMIN_USERNAME}\n\n👉 https://t.me/{ADMIN_USERNAME}"
         try:
             await query.edit_message_text(msg)
@@ -738,6 +737,13 @@ async def button_handler(update, context):
     if data == "admin_verify":
         if username != ADMIN_USERNAME:
             return
+        try:
+            await query.edit_message_text("Enter client username (with @):")
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                print(f"Edit error: {e}")
+        context.user_data["state"] = "VERIFY_USERNAME"
+        return
 
     if data == "admin_status":
         if username != ADMIN_USERNAME:
@@ -749,14 +755,11 @@ async def button_handler(update, context):
             msg += f"@{u} - {p}"
             if e: msg += f" (exp: {e})"
             msg += "\n"
-        await query.edit_message_text(msg, reply_markup=admin_menu())
-        return
         try:
-            await query.edit_message_text("Enter client username (with @):")
+            await query.edit_message_text(msg, reply_markup=admin_menu())
         except Exception as e:
             if "Message is not modified" not in str(e):
                 print(f"Edit error: {e}")
-        context.user_data["state"] = "VERIFY_USERNAME"
         return
 
     if data == "admin_removeuser":
@@ -774,7 +777,8 @@ async def message_handler(update, context):
     username = update.message.from_user.username
     text = update.message.text.strip()
     state = context.user_data.get("state")
-    # Persistent menu button tap
+
+    # Persistent menu button
     if text == "🛡️ Menu":
         await update.message.reply_text("Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
         return
@@ -877,28 +881,6 @@ async def message_handler(update, context):
             context.user_data.pop(k, None)
         return
 
-    if state == "VERIFY_USERNAME":
-        if username != ADMIN_USERNAME:
-            await update.message.reply_text("❌ Admin only.")
-            return
-        target = text.lstrip("@")
-        if not is_client(target):
-            await update.message.reply_text("User not a client.")
-            return
-        context.user_data["verify_target"] = target
-        await update.message.reply_text("Domain to verify (e.g., example.com):")
-        context.user_data["state"] = "VERIFY_DOMAIN"
-        return
-
-    if state == "VERIFY_DOMAIN":
-        target = context.user_data["verify_target"]
-        domain = text.lower()
-        c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (target, domain, "admin_verified"))
-        conn.commit()
-        await update.message.reply_text(f"✅ Domain {domain} verified for @{target}.", reply_markup=admin_menu())
-        context.user_data.pop("state", None)
-        context.user_data.pop("verify_target", None)
-        return
     # ----- ADMIN VERIFY DOMAIN -----
     if state == "VERIFY_USERNAME":
         if username != ADMIN_USERNAME:
@@ -922,7 +904,6 @@ async def message_handler(update, context):
         context.user_data.pop("state", None)
         context.user_data.pop("verify_target", None)
         return
-
 
     if state == "SCAN_DOMAIN":
         domain = text.lower()
@@ -981,6 +962,15 @@ async def message_handler(update, context):
             summary = format_summary(domain, results)
             await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
 
+            # Mark free plan as used
+            c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+            row = c.fetchone()
+            plan = row[0] if row else "free"
+            if plan == "free":
+                c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
+                conn.commit()
+
+            # PDF for monthly/enterprise
             c.execute("SELECT plan FROM clients WHERE username=?", (username,))
             row = c.fetchone()
             plan = row[0] if row else "free"
@@ -1002,7 +992,6 @@ async def message_handler(update, context):
 
     # Fallback
     await update.message.reply_text("I didn't understand. Use the buttons below.", reply_markup=main_menu(username == ADMIN_USERNAME))
-
 
 # ---------- Main ----------
 def main():
