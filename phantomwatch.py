@@ -138,7 +138,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
         if progress_callback:
             progress_callback(f"⚡ [{step}/7] Running {tool}...")
         if tool == "nmap":
-            results["nmap"] = run_command(["nmap", "-sV", "-T4", "-p-", "--script", "vuln", "--min-rate", "500", domain], timeout=300)
+            results["nmap"] = run_command(["nmap", "-sV", "-T4", "--top-ports", "1000", "--script", "vuln", domain], timeout=300)
         elif tool == "nikto":
             results["nikto"] = run_command(["nikto", "-h", domain, "-T", "0123456789abcde", "-maxtime", "300s"], timeout=300)
         elif tool == "whatweb":
@@ -167,7 +167,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
                 results["metagoofil"] = "No metadata found"
         elif tool == "sherlock":
             company = domain.split(".")[0]
-            results["sherlock"] = run_command(["python3", "/home/runner/sherlock/sherlock.py", company, "--timeout", "20"], timeout=200)
+            results["sherlock"] = run_command(["sherlock", company, "--timeout", "20"], timeout=200)
     return results
 
 # ---------- Report formatters ----------
