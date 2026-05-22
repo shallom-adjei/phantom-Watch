@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import subprocess, re, os, sqlite3, random, string, json, time, asyncio, shutil, io
 from datetime import datetime, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -404,6 +404,8 @@ def generate_pdf_report(domain, results, plan):
 
 
 # ---------- Menus ----------
+menu_button = ReplyKeyboardMarkup([[KeyboardButton("🛡️ Menu")]], resize_keyboard=True)
+
 def main_menu(admin=False):
     buttons = [
         [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full"),
@@ -431,7 +433,6 @@ def admin_menu():
     ])
 
 
-menu_button = ReplyKeyboardMarkup([[KeyboardButton("🛡️ Menu")]], resize_keyboard=True)
 def quick_scan_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🛡️ Ports & Vulns", callback_data="quick_ports"),
