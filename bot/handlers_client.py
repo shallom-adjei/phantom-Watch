@@ -434,7 +434,7 @@ async def handle_scan_domain(update, context):
         detailed = plan in ("monthly", "enterprise")
         try:
             summary = format_summary(domain, results, detailed)
-            await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
+            await context.bot.send_message(chat_id=chat_id, text=summary)
         except Exception as e:
             print(f"[ERROR] Failed to send report: {e}")
             try:
