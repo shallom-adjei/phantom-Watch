@@ -11,9 +11,8 @@ from bot.handlers_admin import (
     admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
 )
 import os, asyncio
+from bot.config import BOT_TOKEN
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 
 # Route table
 CALLBACK_ROUTES = {

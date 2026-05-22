@@ -2,7 +2,8 @@
 import asyncio, os, re, json, random, shutil, time, subprocess
 from datetime import datetime
 import requests
-from bot.database import is_active, is_client, generate_token, verify_domain, conn, c, ADMIN_USERNAME
+from bot.database import is_active, is_client, generate_token, verify_domain, conn, c
+from bot.config import ADMIN_USERNAME
 from bot.scanners import run_scan
 from bot.reports import format_summary
 from bot.menus import main_menu, admin_menu

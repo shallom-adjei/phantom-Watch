@@ -1,5 +1,6 @@
 """Admin button handlers and wizards."""
-from bot.database import is_client, add_client, conn, c, ADMIN_USERNAME
+from bot.database import is_client, add_client, conn, c
+from bot.config import ADMIN_USERNAME
 from bot.menus import admin_menu, main_menu
 
 async def admin_menu_handler(update, context):
