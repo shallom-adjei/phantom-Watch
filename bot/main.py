@@ -12,6 +12,7 @@ from bot.handlers_admin import (
 )
 import os, asyncio
 from bot.config import BOT_TOKEN
+from bot.menus import main_menu
 
 
 # Route table
@@ -60,7 +61,7 @@ async def message_router(update, context):
         if handled:
             return
     # Fallback
-    await update.message.reply_text("I didn't understand. Use the buttons below.", reply_markup=main_menu_handler)
+    await update.message.reply_text("I didn't understand. Use the buttons below.", reply_markup=main_menu(username == ADMIN_USERNAME))
 
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
