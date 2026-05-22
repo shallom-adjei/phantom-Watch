@@ -11,7 +11,6 @@ from telegram.ext import (
     ContextTypes,
 )
 import requests
-from fpdf import FPDF
 
 # ========== CONFIG ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -289,7 +288,7 @@ def format_summary(domain, results):
     else:
         lines.append("👥 *Sherlock*: Not run.")
     lines.append("")
-    lines.append("⚠️ This is a FREE summary. Upgrade to Monthly/Enterprise for detailed PDF reports with compliance mapping and exploitation proof.")
+    lines.append("⚠️ This is a FREE summary. Upgrade to Monthly/Enterprise for full reports, compliance mapping, and exploitation proof. Contact admin to upgrade.")
     return "\n".join(lines)
 
 # Compliance mapping
@@ -303,112 +302,6 @@ COMPLIANCE = {
     "metadata_leak": {"pci": "PCI-DSS 6.5.9", "hipaa": "164.308(a)(1)(ii)(D)"},
     "social_media": {"pci": "N/A", "hipaa": "164.308(a)(5)(ii)(B)"},
 }
-
-def generate_pdf_report(domain, results, plan):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.add_font("DejaVu", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
-    pdf.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
-
-    pdf.set_font("DejaVu", "B", 16)
-    pdf.multi_cell(0, 10, "PHANTOM WATCH Security Report", align="C")
-    pdf.set_font("DejaVu", "", 10)
-    pdf.multi_cell(0, 10, f"Domain: {domain}")
-    pdf.multi_cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    pdf.ln(5)
-
-    pdf.set_font("DejaVu", "B", 12)
-    pdf.multi_cell(0, 10, "Detailed Findings")
-    pdf.set_font("DejaVu", "", 9)
-
-    if "nmap" in results:
-        raw = results["nmap"]
-        open_ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", raw, re.MULTILINE)
-        vulns = re.findall(r"\|.*VULNERABLE.*", raw)
-        if open_ports:
-            pdf.set_font("DejaVu", "B", 10)
-            pdf.multi_cell(0, 6, "Open Ports:")
-            pdf.set_font("DejaVu", "", 9)
-            for p in open_ports[:10]:
-                pdf.multi_cell(0, 5, f"• {p}")
-        if vulns:
-            pdf.set_font("DejaVu", "B", 10)
-            pdf.multi_cell(0, 6, "Potential Vulnerabilities:")
-            pdf.set_font("DejaVu", "", 9)
-            for v in vulns[:5]:
-                pdf.multi_cell(0, 5, f"• {v.strip()}")
-        if not open_ports and not vulns:
-            pdf.multi_cell(0, 6, "No open ports or vulnerabilities detected.")
-
-    if "nikto" in results:
-        findings = re.findall(r"\+ (.*)", results["nikto"])
-        if findings:
-            pdf.set_font("DejaVu", "B", 10)
-            pdf.multi_cell(0, 6, "Web Application Issues:")
-            pdf.set_font("DejaVu", "", 9)
-            for f in findings[:10]:
-                pdf.multi_cell(0, 5, f"• {f}")
-        else:
-            pdf.multi_cell(0, 6, "No web application issues found.")
-
-    if "whatweb" in results:
-        clean = re.sub(r"\x1b\[[0-9;]*m", "", results["whatweb"])
-        pdf.multi_cell(0, 6, f"Technology: {clean[:200]}")
-
-    if "theHarvester" in results and results["theHarvester"] != "No email":
-        harvest = results["theHarvester"]
-        if "<html" in harvest.lower():
-            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-            if emails:
-                pdf.set_font("DejaVu", "B", 10)
-                pdf.multi_cell(0, 6, f"Leaked Emails ({len(emails)}):")
-                pdf.set_font("DejaVu", "", 9)
-                pdf.multi_cell(0, 5, ", ".join(emails[:10]))
-
-    if "dnstwist" in results:
-        registered = re.findall(r"^([^ ]+)\s+registered.*", results["dnstwist"], re.MULTILINE)
-        if registered:
-            pdf.set_font("DejaVu", "B", 10)
-            pdf.multi_cell(0, 6, "Typosquatting Domains:")
-            pdf.set_font("DejaVu", "", 9)
-            for d in registered[:5]:
-                pdf.multi_cell(0, 5, f"• {d}")
-
-    if "metagoofil" in results and "No metadata" not in results.get("metagoofil", ""):
-        pdf.set_font("DejaVu", "B", 10)
-        pdf.multi_cell(0, 6, "Document Metadata Leaks:")
-        pdf.set_font("DejaVu", "", 9)
-        pdf.multi_cell(0, 5, results["metagoofil"][:500])
-
-    if "sherlock" in results:
-        found = re.findall(r"\[\+\] (.*)", results["sherlock"])
-        if found:
-            pdf.set_font("DejaVu", "B", 10)
-            pdf.multi_cell(0, 6, "Social Media Accounts:")
-            pdf.set_font("DejaVu", "", 9)
-            for f in found[:10]:
-                pdf.multi_cell(0, 5, f"• {f}")
-
-    pdf.ln(5)
-    pdf.set_font("DejaVu", "B", 12)
-    pdf.multi_cell(0, 10, "Compliance Status")
-    pdf.set_font("DejaVu", "", 9)
-    for category, rules in COMPLIANCE.items():
-        status = "✅"
-        if category == "xss" and "dalfox" in results and "vulnerable" in results.get("dalfox", "").lower():
-            status = "❌"
-        elif category == "open_port" and any("open" in str(results.get("nmap", ""))):
-            status = "❌"
-        elif category == "vulnerable_service" and any("VULNERABLE" in str(results.get("nmap", ""))):
-            status = "❌"
-        elif category == "leaked_email" and "theHarvester" in results and "Leaked" in str(results.get("theHarvester", "")):
-            status = "❌"
-        pdf.multi_cell(0, 6, f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
-
-    buf = io.BytesIO()
-    pdf.output(buf)
-    buf.seek(0)
-    return buf
 
 
 # ---------- Menus ----------
@@ -964,14 +857,8 @@ async def message_handler(update, context):
                 c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
                 conn.commit()
 
-            # PDF for monthly/enterprise ONLY
-            if plan in ("monthly", "enterprise"):
-                try:
-                    pdf_buf = generate_pdf_report(domain, results, plan)
-                    pdf_buf.name = f"PhantomWatch-{domain}-report.pdf"
-                    await context.bot.send_document(chat_id=chat_id, document=pdf_buf, caption="📎 Detailed compliance report")
-                except Exception as e:
-                    await context.bot.send_message(chat_id=chat_id, text=f"⚠️ PDF generation failed: {e}")
+            # PDF reports are available on paid plans.
+            # Contact admin to upgrade.
         else:
             await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
 
