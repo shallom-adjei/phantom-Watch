@@ -288,7 +288,16 @@ def format_summary(domain, results, detailed=False):
     else:
         lines.append("👥 *Sherlock*: Not run.")
     lines.append("")
-    lines.append("⚠️ This is a FREE summary. Upgrade to Monthly/Enterprise for full reports, compliance mapping, and exploitation proof. Contact admin to upgrade.")
+    if detailed:
+        lines.append("")
+        lines.append("📋 *DETAILED PAID REPORT*")
+        for tool_name, raw in results.items():
+            if raw and raw not in ("No email", "No results"):
+                lines.append(f"\n🛠 *{tool_name} raw excerpt:*\n```{str(raw)[:300]}```")
+        lines.append("\n⚠️ For compliance mapping & exploitation proof, contact admin.")
+    else:
+        lines.append("")
+        lines.append("⚠️ This is a FREE summary. Upgrade to Monthly/Enterprise for full reports, compliance mapping, and exploitation proof. Contact admin to upgrade.")
     return "\n".join(lines)
 
 # Compliance mapping
