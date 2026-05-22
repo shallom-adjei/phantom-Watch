@@ -62,7 +62,13 @@ async def message_router(update, context):
 
     # Scan domain state
     if state == "SCAN_DOMAIN":
-        handled = await handle_scan_domain(update, context)
+        try:
+            handled = await handle_scan_domain(update, context)
+        except Exception as e:
+            print(f"[ERROR] handle_scan_domain crashed: {e}")
+            import traceback
+            traceback.print_exc()
+            handled = False
         if handled:
             return
 

@@ -74,6 +74,7 @@ async def scan_full_handler(update, context):
         if "Message is not modified" not in str(e):
             print(f"Edit error: {e}")
     context.user_data["state"] = "SCAN_DOMAIN"
+    print(f"[DEBUG] State set to SCAN_DOMAIN for {username}")
 
 async def scan_quick_handler(update, context):
     query = update.callback_query
@@ -113,6 +114,7 @@ async def quick_scan_subhandler(update, context):
         if "Message is not modified" not in str(e):
             print(f"Edit error: {e}")
     context.user_data["state"] = "SCAN_DOMAIN"
+    print(f"[DEBUG] State set to SCAN_DOMAIN for {username}")
 
 async def set_email_handler(update, context):
     query = update.callback_query
@@ -367,6 +369,7 @@ async def handle_client_message(update, context):
 
 # Scan domain handler
 async def handle_scan_domain(update, context):
+    print(f"[DEBUG] handle_scan_domain called with state={context.user_data.get('state')}")
     username = update.message.from_user.username
     domain = update.message.text.strip().lower()
     if not re.match(r"^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$", domain):
