@@ -138,7 +138,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
         if progress_callback:
             progress_callback(f"⚡ [{step}/7] Running {tool}...")
         if tool == "nmap":
-            results["nmap"] = run_command(["nmap", "-sV", "-T4", "-p-", "--script", "vuln,exploit,auth,default,discovery", domain], timeout=300)
+            results["nmap"] = run_command(["nmap", "-sV", "-T4", "--top-ports", "1000", "--script", "vuln", domain], timeout=300)
         elif tool == "nikto":
             results["nikto"] = run_command(["nikto", "-h", domain, "-T", "0123456789abcde", "-maxtime", "300s"], timeout=300)
         elif tool == "whatweb":
@@ -167,7 +167,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
                 results["metagoofil"] = "No metadata found"
         elif tool == "sherlock":
             company = domain.split(".")[0]
-            results["sherlock"] = run_command(["python3", "/home/runner/sherlock/sherlock.py", company, "--timeout", "20"], timeout=200)
+            results["sherlock"] = run_command(["python3", "/home/runner/sherlock/sherlock/sherlock.py", company, "--timeout", "20"], timeout=200)
     return results
 
 # ---------- Report formatters ----------
@@ -293,7 +293,7 @@ def format_summary(domain, results, detailed=False):
         lines.append("📋 *DETAILED PAID REPORT*")
         for tool_name, raw in results.items():
             if raw and raw not in ("No email", "No results"):
-                lines.append(f"\n🛠 *{tool_name} raw excerpt:*\n```{str(raw)[:300]}```")
+                lines.append(f"\n🛠 *{tool_name} raw excerpt:*\n```{re.sub(r"\x1b\[[0-9;]*m", "", str(raw))[:300]}```")
         lines.append("\n⚠️ For compliance mapping & exploitation proof, contact admin.")
     else:
         lines.append("")
