@@ -310,17 +310,17 @@ def format_summary(domain, results):
 def generate_pdf_report(domain, results, plan):
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font("DejaVu", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", uni=True)
-    pdf.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", uni=True)
+    pdf.add_font("DejaVu", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+    pdf.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
     pdf.set_font("DejaVu", "B", 16)
-    pdf.cell(0, 10, "PHANTOM WATCH Security Report", ln=True, align="C")
+    pdf.cell(0, 10, "PHANTOM WATCH Security Report", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.set_font("DejaVu", "", 10)
-    pdf.cell(0, 10, f"Domain: {domain}", ln=True)
-    pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+    pdf.cell(0, 10, f"Domain: {domain}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(5)
 
     pdf.set_font("DejaVu", "B", 12)
-    pdf.cell(0, 10, "Detailed Findings", ln=True)
+    pdf.cell(0, 10, "Detailed Findings", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("DejaVu", "", 9)
 
     if "nmap" in results:
@@ -329,33 +329,33 @@ def generate_pdf_report(domain, results, plan):
         vulns = re.findall(r"\|.*VULNERABLE.*", raw)
         if open_ports:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Open Ports:", ln=True)
+            pdf.cell(0, 6, "Open Ports:", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("DejaVu", "", 9)
             for p in open_ports[:10]:
                 pdf.multi_cell(0, 5, f"• {p}")
         if vulns:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Potential Vulnerabilities:", ln=True)
+            pdf.cell(0, 6, "Potential Vulnerabilities:", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("DejaVu", "", 9)
             for v in vulns[:5]:
                 pdf.multi_cell(0, 5, f"• {v.strip()}")
         if not open_ports and not vulns:
-            pdf.cell(0, 6, "No open ports or vulnerabilities detected.", ln=True)
+            pdf.cell(0, 6, "No open ports or vulnerabilities detected.", new_x="LMARGIN", new_y="NEXT")
 
     if "nikto" in results:
         findings = re.findall(r"\+ (.*)", results["nikto"])
         if findings:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Web Application Issues:", ln=True)
+            pdf.cell(0, 6, "Web Application Issues:", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("DejaVu", "", 9)
             for f in findings[:10]:
                 pdf.multi_cell(0, 5, f"• {f}")
         else:
-            pdf.cell(0, 6, "No web application issues found.", ln=True)
+            pdf.cell(0, 6, "No web application issues found.", new_x="LMARGIN", new_y="NEXT")
 
     if "whatweb" in results:
         clean = re.sub(r"\x1b\[[0-9;]*m", "", results["whatweb"])
-        pdf.cell(0, 6, f"Technology: {clean[:200]}", ln=True)
+        pdf.cell(0, 6, f"Technology: {clean[:200]}", new_x="LMARGIN", new_y="NEXT")
 
     if "theHarvester" in results and results["theHarvester"] != "No email":
         harvest = results["theHarvester"]
@@ -363,7 +363,7 @@ def generate_pdf_report(domain, results, plan):
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
             if emails:
                 pdf.set_font("DejaVu", "B", 10)
-                pdf.cell(0, 6, f"Leaked Emails ({len(emails)}):", ln=True)
+                pdf.cell(0, 6, f"Leaked Emails ({len(emails)}):", new_x="LMARGIN", new_y="NEXT")
                 pdf.set_font("DejaVu", "", 9)
                 pdf.multi_cell(0, 5, ", ".join(emails[:10]))
 
@@ -371,14 +371,14 @@ def generate_pdf_report(domain, results, plan):
         registered = re.findall(r"^([^ ]+)\s+registered.*", results["dnstwist"], re.MULTILINE)
         if registered:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Typosquatting Domains:", ln=True)
+            pdf.cell(0, 6, "Typosquatting Domains:", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("DejaVu", "", 9)
             for d in registered[:5]:
                 pdf.multi_cell(0, 5, f"• {d}")
 
     if "metagoofil" in results and "No metadata" not in results.get("metagoofil", ""):
         pdf.set_font("DejaVu", "B", 10)
-        pdf.cell(0, 6, "Document Metadata Leaks:", ln=True)
+        pdf.cell(0, 6, "Document Metadata Leaks:", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("DejaVu", "", 9)
         pdf.multi_cell(0, 5, results["metagoofil"][:500])
 
@@ -386,14 +386,14 @@ def generate_pdf_report(domain, results, plan):
         found = re.findall(r"\[\+\] (.*)", results["sherlock"])
         if found:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Social Media Accounts:", ln=True)
+            pdf.cell(0, 6, "Social Media Accounts:", new_x="LMARGIN", new_y="NEXT")
             pdf.set_font("DejaVu", "", 9)
             for f in found[:10]:
                 pdf.multi_cell(0, 5, f"• {f}")
 
     pdf.ln(5)
     pdf.set_font("DejaVu", "B", 12)
-    pdf.cell(0, 10, "Compliance Status", ln=True)
+    pdf.cell(0, 10, "Compliance Status", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("DejaVu", "", 9)
     for category, rules in COMPLIANCE.items():
         status = "✅"
@@ -405,7 +405,7 @@ def generate_pdf_report(domain, results, plan):
             status = "❌"
         elif category == "leaked_email" and "theHarvester" in results and "Leaked" in str(results.get("theHarvester", "")):
             status = "❌"
-        pdf.cell(0, 6, f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}", ln=True)
+        pdf.cell(0, 6, f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}", new_x="LMARGIN", new_y="NEXT")
 
     buf = io.BytesIO()
     pdf.output(buf)
