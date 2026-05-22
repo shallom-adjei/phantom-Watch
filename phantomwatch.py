@@ -711,7 +711,7 @@ async def button_handler(update, context):
 
     if data == "contact_admin":
         admin_link = f"https://t.me/{ADMIN_USERNAME}"
-                msg = f"📩 Contact the admin: @{ADMIN_USERNAME}\n\n👉 https://t.me/{ADMIN_USERNAME}"
+            msg = f"📩 Contact the admin: @{ADMIN_USERNAME}\n\n👉 https://t.me/{ADMIN_USERNAME}"
         try:
             await query.edit_message_text(msg)
         except Exception as e:
