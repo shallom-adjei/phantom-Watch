@@ -12,6 +12,7 @@ from telegram.ext import (
 )
 import requests
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 
 # ========== CONFIG ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -27,7 +28,8 @@ c.execute("""CREATE TABLE IF NOT EXISTS clients (
     username TEXT PRIMARY KEY,
     plan TEXT DEFAULT 'free',
     expiry TEXT,
-    email_collect TEXT DEFAULT ''
+    email_collect TEXT DEFAULT '',
+    scan_used INTEGER DEFAULT 0
 )""")
 c.execute("""CREATE TABLE IF NOT EXISTS verification (
     username TEXT, domain TEXT, token TEXT,
@@ -39,12 +41,6 @@ c.execute("""CREATE TABLE IF NOT EXISTS subscriptions (
     PRIMARY KEY(username, domain)
 )""")
 conn.commit()
-
-# Ensure scan_used column exists
-try:
-    c.execute("ALTER TABLE clients ADD COLUMN scan_used INTEGER DEFAULT 0")
-except:
-    pass
 
 # ---------- Helpers ----------
 def is_client(username: str) -> bool:
@@ -59,7 +55,7 @@ def is_active(username: str) -> bool:
     plan, expiry, scan_used = row
     if plan == "free":
         if scan_used:
-            return False  # free trial already used
+            return False
         if expiry and expiry < datetime.now().strftime("%Y-%m-%d"):
             return False
         return True
@@ -81,59 +77,68 @@ def generate_token() -> str:
 
 def verify_domain(domain: str, token: str) -> bool:
     try:
-        r = subprocess.run(["curl", "-s", "-m", "15", f"http://{domain}/verify.txt"],
-                           capture_output=True, text=True)
+        r = subprocess.run(
+            ["curl", "-s", "-m", "15", f"http://{domain}/verify.txt"],
+            capture_output=True,
+            text=True,
+        )
         return r.stdout.strip() == token
     except:
         return False
 
-def run_command(cmd: str, timeout: int = SCAN_TIMEOUT) -> str:
+def run_command(cmd, timeout=SCAN_TIMEOUT):
     try:
-        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return r.stdout + r.stderr
     except:
         return "[!] Error"
 
 async def check_breach(email: str, context, chat_id: int):
     try:
-        resp = requests.get(f"https://api.xposedornot.com/v1/breach-analytics?email={email}", timeout=15)
+        resp = requests.get(
+            f"https://api.xposedornot.com/v1/breach-analytics?email={email}",
+            timeout=15,
+        )
         if resp.status_code == 200:
             data = resp.json()
             breach_details = data.get("breach_details", {})
             if breach_details:
                 total = len(breach_details)
-                lines = [f"🩸 *Breach Report for {email}*", f"Found in *{total}* known breaches:\n"]
+                lines = [
+                    f"🩸 *Breach Report for {email}*",
+                    f"Found in *{total}* known breaches:\n",
+                ]
                 for name, info in list(breach_details.items())[:10]:
                     domain = info.get("domain", "unknown")
                     date = info.get("breach_date", "N/A")
                     lines.append(f"• *{name}* ({domain}) – {date}")
                 if total > 10:
                     lines.append(f"… and {total - 10} more breaches.")
-                await context.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode="Markdown")
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="\n".join(lines),
+                    parse_mode="Markdown",
+                )
                 return
     except:
         pass
-    await context.bot.send_message(chat_id=chat_id, text="✅ No breaches found for this email.")
+    await context.bot.send_message(
+        chat_id=chat_id, text="✅ No breaches found for this email."
+    )
 
 # ---------- Scan engine ----------
 def run_scan(domain, email="", progress_callback=None, tools=None):
     if tools is None:
         tools = ["nmap", "nikto", "whatweb", "theHarvester", "dnstwist", "metagoofil", "sherlock"]
     results = {}
+    step_map = {
+        "nmap": 1, "nikto": 2, "whatweb": 3, "theHarvester": 4,
+        "dnstwist": 5, "metagoofil": 6, "sherlock": 7
+    }
     for tool in tools:
+        step = step_map.get(tool, 0)
         if progress_callback:
-            step = { "nmap":1, "nikto":2, "whatweb":3, "theHarvester":4, "dnstwist":5, "metagoofil":6, "sherlock":7, "dalfox":8 }.get(tool, 0)
-            messages = {
-                1: "⚡ [1/7] Mapping infrastructure & ports...",
-                2: "🕵️ [2/7] Probing web server security...",
-                3: "🔎 [3/7] Fingerprinting technologies...",
-                4: "📧 [4/7] Harvesting public OSINT data...",
-                5: "🔄 [5/7] Hunting typosquatting domains...",
-                6: "📄 [6/7] Extracting document metadata...",
-                7: "👤 [7/7] Searching social media footprint...",
-                8: "🦠 [8/8] Scanning for XSS vulnerabilities..."
-            }
-            progress_callback(messages.get(step, f"Running {tool}..."))
+            progress_callback(f"⚡ [{step}/7] Running {tool}...")
         if tool == "nmap":
             results["nmap"] = run_command(["nmap", "-sV", "-T4", "-p-", "--script", "vuln,exploit,auth,default,discovery", domain], timeout=300)
         elif tool == "nikto":
@@ -154,7 +159,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
         elif tool == "dnstwist":
             results["dnstwist"] = run_command(["dnstwist", domain])
         elif tool == "metagoofil":
-            raw = run_command(f"cd /home/runner/metagoofil && python3 metagoofil.py -d {domain} -t pdf,doc,xls -l 10 -n 5 -o /tmp/meta_{domain} -f meta_{domain}.html", timeout=300)
+            raw = run_command(["python3", "/home/runner/metagoofil/metagoofil.py", "-d", domain, "-t", "pdf,doc,xls", "-l", "20", "-n", "10", "-o", f"/tmp/meta_{domain}", "-f", f"meta_{domain}.html"], timeout=300)
             meta_report = f"/tmp/meta_{domain}/meta_{domain}.html"
             if os.path.exists(meta_report):
                 with open(meta_report) as f:
@@ -164,57 +169,45 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
                 results["metagoofil"] = "No metadata found"
         elif tool == "sherlock":
             company = domain.split(".")[0]
-            results["sherlock"] = run_command(["python3", "/home/runner/sherlock/sherlock.py", company, "--timeout", "20"])
+            results["sherlock"] = run_command(["python3", "/home/runner/sherlock/sherlock.py", company, "--timeout", "20"], timeout=200)
     return results
 
 # ---------- Report formatters ----------
-
 def compute_threat_score(results):
-    """Return (score, level) based on findings."""
     score = 0
     max_score = 0
-
     if 'nmap' in results:
         open_ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get('nmap',''), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get('nmap','')))
         score += (open_ports * 5) + (vulns * 15)
         max_score += (10 * 5) + (10 * 15)
-
     if 'nikto' in results:
         issues = len(re.findall(r"\+ (.*)", results.get('nikto','')))
         score += issues * 10
         max_score += 10 * 10
-
     if 'theHarvester' in results and results['theHarvester'] != "No email":
         harvest = results['theHarvester']
         if "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
             score += len(emails) * 10
             max_score += 20 * 10
-
     if 'dnstwist' in results:
         registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get('dnstwist',''), re.MULTILINE))
         score += registered * 10
         max_score += 10 * 10
-
     if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
         score += 25
         max_score += 25
-
     if 'sherlock' in results:
         found = len(re.findall(r"\[\+\] (.*)", results.get('sherlock','')))
         score += found * 5
         max_score += 20 * 5
-
     if 'dalfox' in results and "vulnerable" in results.get('dalfox','').lower():
         score += 50
         max_score += 50
-
     if max_score == 0:
         return 0, "LOW"
-
     percent = min(100, int((score / max_score) * 100))
-
     if percent < 10:
         level = "LOW"
     elif percent < 30:
@@ -223,7 +216,6 @@ def compute_threat_score(results):
         level = "HIGH"
     else:
         level = "CRITICAL"
-
     return percent, level
 
 def format_summary(domain, results):
@@ -232,7 +224,7 @@ def format_summary(domain, results):
     lines = [
         f"🔍 *Scan completed for {domain}*",
         f"{risk_emoji} Threat Score: *{score}/100*  |  Risk Level: *{level}*\n",
-        "━━━━━━━━━━━━━━━━━━" 
+        "━━━━━━━━━━━━━━━━━━"
     ]
     # Nmap
     if "nmap" in results:
@@ -307,20 +299,34 @@ def format_summary(domain, results):
     lines.append("")
     lines.append("⚠️ This is a FREE summary. Upgrade to Monthly/Enterprise for detailed PDF reports with compliance mapping and exploitation proof.")
     return "\n".join(lines)
+
+# Compliance mapping
+COMPLIANCE = {
+    "xss": {"pci": "PCI-DSS 6.5.7", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "sqli": {"pci": "PCI-DSS 6.5.1", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "open_port": {"pci": "PCI-DSS 1.1.6", "hipaa": "164.308(a)(4)(ii)(B)"},
+    "vulnerable_service": {"pci": "PCI-DSS 6.1", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "leaked_email": {"pci": "PCI-DSS 6.5.10", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "typosquatting": {"pci": "N/A", "hipaa": "164.308(a)(5)(ii)(B)"},
+    "metadata_leak": {"pci": "PCI-DSS 6.5.9", "hipaa": "164.308(a)(1)(ii)(D)"},
+    "social_media": {"pci": "N/A", "hipaa": "164.308(a)(5)(ii)(B)"},
+}
+
 def generate_pdf_report(domain, results, plan):
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font("DejaVu", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", uni=True)
-    pdf.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", uni=True)
+    pdf.add_font("DejaVu", "", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+    pdf.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+
     pdf.set_font("DejaVu", "B", 16)
-    pdf.cell(0, 10, "PHANTOM WATCH Security Report", ln=True, align="C")
+    pdf.cell(0, 10, "PHANTOM WATCH Security Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
     pdf.set_font("DejaVu", "", 10)
-    pdf.cell(0, 10, f"Domain: {domain}", ln=True)
-    pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True)
+    pdf.cell(0, 10, f"Domain: {domain}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(5)
 
     pdf.set_font("DejaVu", "B", 12)
-    pdf.cell(0, 10, "Detailed Findings", ln=True)
+    pdf.cell(0, 10, "Detailed Findings", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("DejaVu", "", 9)
 
     if "nmap" in results:
@@ -329,33 +335,33 @@ def generate_pdf_report(domain, results, plan):
         vulns = re.findall(r"\|.*VULNERABLE.*", raw)
         if open_ports:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Open Ports:", ln=True)
+            pdf.cell(0, 6, "Open Ports:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("DejaVu", "", 9)
             for p in open_ports[:10]:
                 pdf.multi_cell(0, 5, f"• {p}")
         if vulns:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Potential Vulnerabilities:", ln=True)
+            pdf.cell(0, 6, "Potential Vulnerabilities:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("DejaVu", "", 9)
             for v in vulns[:5]:
                 pdf.multi_cell(0, 5, f"• {v.strip()}")
         if not open_ports and not vulns:
-            pdf.cell(0, 6, "No open ports or vulnerabilities detected.", ln=True)
+            pdf.cell(0, 6, "No open ports or vulnerabilities detected.", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     if "nikto" in results:
         findings = re.findall(r"\+ (.*)", results["nikto"])
         if findings:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Web Application Issues:", ln=True)
+            pdf.cell(0, 6, "Web Application Issues:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("DejaVu", "", 9)
             for f in findings[:10]:
                 pdf.multi_cell(0, 5, f"• {f}")
         else:
-            pdf.cell(0, 6, "No web application issues found.", ln=True)
+            pdf.cell(0, 6, "No web application issues found.", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     if "whatweb" in results:
         clean = re.sub(r"\x1b\[[0-9;]*m", "", results["whatweb"])
-        pdf.cell(0, 6, f"Technology: {clean[:200]}", ln=True)
+        pdf.cell(0, 6, f"Technology: {clean[:200]}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     if "theHarvester" in results and results["theHarvester"] != "No email":
         harvest = results["theHarvester"]
@@ -363,7 +369,7 @@ def generate_pdf_report(domain, results, plan):
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
             if emails:
                 pdf.set_font("DejaVu", "B", 10)
-                pdf.cell(0, 6, f"Leaked Emails ({len(emails)}):", ln=True)
+                pdf.cell(0, 6, f"Leaked Emails ({len(emails)}):", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_font("DejaVu", "", 9)
                 pdf.multi_cell(0, 5, ", ".join(emails[:10]))
 
@@ -371,14 +377,14 @@ def generate_pdf_report(domain, results, plan):
         registered = re.findall(r"^([^ ]+)\s+registered.*", results["dnstwist"], re.MULTILINE)
         if registered:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Typosquatting Domains:", ln=True)
+            pdf.cell(0, 6, "Typosquatting Domains:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("DejaVu", "", 9)
             for d in registered[:5]:
                 pdf.multi_cell(0, 5, f"• {d}")
 
     if "metagoofil" in results and "No metadata" not in results.get("metagoofil", ""):
         pdf.set_font("DejaVu", "B", 10)
-        pdf.cell(0, 6, "Document Metadata Leaks:", ln=True)
+        pdf.cell(0, 6, "Document Metadata Leaks:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("DejaVu", "", 9)
         pdf.multi_cell(0, 5, results["metagoofil"][:500])
 
@@ -386,14 +392,14 @@ def generate_pdf_report(domain, results, plan):
         found = re.findall(r"\[\+\] (.*)", results["sherlock"])
         if found:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Social Media Accounts:", ln=True)
+            pdf.cell(0, 6, "Social Media Accounts:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.set_font("DejaVu", "", 9)
             for f in found[:10]:
                 pdf.multi_cell(0, 5, f"• {f}")
 
     pdf.ln(5)
     pdf.set_font("DejaVu", "B", 12)
-    pdf.cell(0, 10, "Compliance Status", ln=True)
+    pdf.cell(0, 10, "Compliance Status", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("DejaVu", "", 9)
     for category, rules in COMPLIANCE.items():
         status = "✅"
@@ -405,7 +411,7 @@ def generate_pdf_report(domain, results, plan):
             status = "❌"
         elif category == "leaked_email" and "theHarvester" in results and "Leaked" in str(results.get("theHarvester", "")):
             status = "❌"
-        pdf.cell(0, 6, f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}", ln=True)
+        pdf.cell(0, 6, f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     buf = io.BytesIO()
     pdf.output(buf)
@@ -433,7 +439,6 @@ def main_menu(admin=False):
         buttons.append([InlineKeyboardButton("👑 Admin Menu", callback_data="admin_menu")])
     return InlineKeyboardMarkup(buttons)
 
-
 def admin_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add User", callback_data="admin_adduser"),
@@ -442,7 +447,6 @@ def admin_menu():
         [InlineKeyboardButton("❌ Remove User", callback_data="admin_removeuser"),
          InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ])
-
 
 def quick_scan_menu():
     return InlineKeyboardMarkup([
@@ -456,13 +460,12 @@ def quick_scan_menu():
 
 # ---------- Handlers ----------
 async def start(update, context):
-    # Send the persistent menu button NEXT to the text field
+    # Send persistent menu button
     await update.message.reply_text(
         "Tap the *🛡️ Menu* button below anytime to bring up options.",
         reply_markup=menu_button,
         parse_mode="Markdown",
     )
-    # Now send the inline menu
     await update.message.reply_text(
         "🔮 *PHANTOM WATCH*\n"
         "_Elite Digital Reconnaissance & Threat Intelligence_\n"
@@ -481,6 +484,7 @@ async def start(update, context):
         reply_markup=main_menu(update.message.from_user.username == ADMIN_USERNAME),
         parse_mode="Markdown",
     )
+
 async def button_handler(update, context):
     query = update.callback_query
     await query.answer()
@@ -773,6 +777,7 @@ async def button_handler(update, context):
         context.user_data["state"] = "REMOVE_USER"
         return
 
+
 async def message_handler(update, context):
     username = update.message.from_user.username
     text = update.message.text.strip()
@@ -971,9 +976,6 @@ async def message_handler(update, context):
                 conn.commit()
 
             # PDF for monthly/enterprise
-            c.execute("SELECT plan FROM clients WHERE username=?", (username,))
-            row = c.fetchone()
-            plan = row[0] if row else "free"
             if plan in ("monthly", "enterprise"):
                 try:
                     pdf_buf = generate_pdf_report(domain, results, plan)
@@ -992,6 +994,7 @@ async def message_handler(update, context):
 
     # Fallback
     await update.message.reply_text("I didn't understand. Use the buttons below.", reply_markup=main_menu(username == ADMIN_USERNAME))
+
 
 # ---------- Main ----------
 def main():
