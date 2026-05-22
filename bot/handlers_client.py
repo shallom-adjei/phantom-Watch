@@ -421,22 +421,28 @@ async def handle_scan_domain(update, context):
     except:
         pass
 
-    if results:
-        c.execute("SELECT plan FROM clients WHERE username=?", (username,))
-        row = c.fetchone()
-        plan = row[0] if row else "free"
-        detailed = plan in ("monthly", "enterprise")
-        summary = format_summary(domain, results, detailed)
-        await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
+        if results:
+            c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+            row = c.fetchone()
+            plan = row[0] if row else "free"
+            detailed = plan in ("monthly", "enterprise")
+            summary = format_summary(domain, results, detailed)
+            await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
 
-        if plan == "free":
-            c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
-            conn.commit()
-    else:
-        await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
+            if plan == "free":
+                c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
+                conn.commit()
 
-    context.user_data.pop("state", None)
-    context.user_data.pop("scan_type", None)
-    context.user_data.pop("tools", None)
-    await update.message.reply_text("🔮 What's next?", reply_markup=main_menu(username == ADMIN_USERNAME))
-    return True
+            # Exploitation proof for enterprise users (if XSS found)
+            if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
+                from bot.exploit_proof import capture_xss_proof
+                await capture_xss_proof(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
+
+        else:
+            await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
+
+        context.user_data.pop("state", None)
+        context.user_data.pop("scan_type", None)
+        context.user_data.pop("tools", None)
+        await update.message.reply_text("🔮 What's next?", reply_markup=main_menu(username == ADMIN_USERNAME))
+        return True
