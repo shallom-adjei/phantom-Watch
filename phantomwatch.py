@@ -12,7 +12,6 @@ from telegram.ext import (
 )
 import requests
 from fpdf import FPDF
-from fpdf.enums import XPos, YPos
 
 # ========== CONFIG ==========
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -319,14 +318,14 @@ def generate_pdf_report(domain, results, plan):
     pdf.add_font("DejaVu", "B", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
     pdf.set_font("DejaVu", "B", 16)
-    pdf.cell(0, 10, "PHANTOM WATCH Security Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.multi_cell(0, 10, "PHANTOM WATCH Security Report", align="C")
     pdf.set_font("DejaVu", "", 10)
-    pdf.cell(0, 10, f"Domain: {domain}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.multi_cell(0, 10, f"Domain: {domain}")
+    pdf.multi_cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     pdf.ln(5)
 
     pdf.set_font("DejaVu", "B", 12)
-    pdf.cell(0, 10, "Detailed Findings", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.multi_cell(0, 10, "Detailed Findings")
     pdf.set_font("DejaVu", "", 9)
 
     if "nmap" in results:
@@ -335,33 +334,33 @@ def generate_pdf_report(domain, results, plan):
         vulns = re.findall(r"\|.*VULNERABLE.*", raw)
         if open_ports:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Open Ports:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 6, "Open Ports:")
             pdf.set_font("DejaVu", "", 9)
             for p in open_ports[:10]:
                 pdf.multi_cell(0, 5, f"• {p}")
         if vulns:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Potential Vulnerabilities:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 6, "Potential Vulnerabilities:")
             pdf.set_font("DejaVu", "", 9)
             for v in vulns[:5]:
                 pdf.multi_cell(0, 5, f"• {v.strip()}")
         if not open_ports and not vulns:
-            pdf.cell(0, 6, "No open ports or vulnerabilities detected.", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 6, "No open ports or vulnerabilities detected.")
 
     if "nikto" in results:
         findings = re.findall(r"\+ (.*)", results["nikto"])
         if findings:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Web Application Issues:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 6, "Web Application Issues:")
             pdf.set_font("DejaVu", "", 9)
             for f in findings[:10]:
                 pdf.multi_cell(0, 5, f"• {f}")
         else:
-            pdf.cell(0, 6, "No web application issues found.", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 6, "No web application issues found.")
 
     if "whatweb" in results:
         clean = re.sub(r"\x1b\[[0-9;]*m", "", results["whatweb"])
-        pdf.cell(0, 6, f"Technology: {clean[:200]}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.multi_cell(0, 6, f"Technology: {clean[:200]}")
 
     if "theHarvester" in results and results["theHarvester"] != "No email":
         harvest = results["theHarvester"]
@@ -369,7 +368,7 @@ def generate_pdf_report(domain, results, plan):
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
             if emails:
                 pdf.set_font("DejaVu", "B", 10)
-                pdf.cell(0, 6, f"Leaked Emails ({len(emails)}):", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+                pdf.multi_cell(0, 6, f"Leaked Emails ({len(emails)}):")
                 pdf.set_font("DejaVu", "", 9)
                 pdf.multi_cell(0, 5, ", ".join(emails[:10]))
 
@@ -377,14 +376,14 @@ def generate_pdf_report(domain, results, plan):
         registered = re.findall(r"^([^ ]+)\s+registered.*", results["dnstwist"], re.MULTILINE)
         if registered:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Typosquatting Domains:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 6, "Typosquatting Domains:")
             pdf.set_font("DejaVu", "", 9)
             for d in registered[:5]:
                 pdf.multi_cell(0, 5, f"• {d}")
 
     if "metagoofil" in results and "No metadata" not in results.get("metagoofil", ""):
         pdf.set_font("DejaVu", "B", 10)
-        pdf.cell(0, 6, "Document Metadata Leaks:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.multi_cell(0, 6, "Document Metadata Leaks:")
         pdf.set_font("DejaVu", "", 9)
         pdf.multi_cell(0, 5, results["metagoofil"][:500])
 
@@ -392,14 +391,14 @@ def generate_pdf_report(domain, results, plan):
         found = re.findall(r"\[\+\] (.*)", results["sherlock"])
         if found:
             pdf.set_font("DejaVu", "B", 10)
-            pdf.cell(0, 6, "Social Media Accounts:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            pdf.multi_cell(0, 6, "Social Media Accounts:")
             pdf.set_font("DejaVu", "", 9)
             for f in found[:10]:
                 pdf.multi_cell(0, 5, f"• {f}")
 
     pdf.ln(5)
     pdf.set_font("DejaVu", "B", 12)
-    pdf.cell(0, 10, "Compliance Status", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.multi_cell(0, 10, "Compliance Status")
     pdf.set_font("DejaVu", "", 9)
     for category, rules in COMPLIANCE.items():
         status = "✅"
@@ -411,17 +410,12 @@ def generate_pdf_report(domain, results, plan):
             status = "❌"
         elif category == "leaked_email" and "theHarvester" in results and "Leaked" in str(results.get("theHarvester", "")):
             status = "❌"
-        pdf.cell(0, 6, f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.multi_cell(0, 6, f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
 
     buf = io.BytesIO()
     pdf.output(buf)
     buf.seek(0)
     return buf
-
-
-# ---------- Menus ----------
-menu_button = ReplyKeyboardMarkup([[KeyboardButton("🛡️ Menu")]], resize_keyboard=True)
-
 def main_menu(admin=False):
     buttons = [
         [InlineKeyboardButton("🔍 Full Scan", callback_data="scan_full"),
