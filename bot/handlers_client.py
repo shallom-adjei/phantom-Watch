@@ -427,32 +427,34 @@ async def handle_scan_domain(update, context):
     except:
         pass
 
-    if results:
-        c.execute("SELECT plan FROM clients WHERE username=?", (username,))
-        row = c.fetchone()
-        plan = row[0] if row else "free"
-        detailed = plan in ("monthly", "enterprise")
-        try:
-            summary = format_summary(domain, results, detailed)
-            await context.bot.send_message(chat_id=chat_id, text=summary)
-        except Exception as e:
-            print(f"[ERROR] Failed to send report: {e}")
-            try:
-                # Fallback: send without Markdown parsing
-                await context.bot.send_message(chat_id=chat_id, text=summary)
-            except:
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ Report generation failed. Please contact admin.")
-        if plan == "free":
-            c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
-            conn.commit()
+        if results:
+            # Determine plan for paid features
+            c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+            row = c.fetchone()
+            plan = row[0] if row else "free"
+            detailed = plan in ("monthly", "enterprise")
 
-        # Exploitation proof for enterprise users (if XSS found)
-        if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
-            from bot.exploit_proof import capture_xss_proof
-            await capture_xss_proof(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
+            # Build report parts (list of (text, parse_mode))
+            from bot.reports import build_report_parts
+            parts = build_report_parts(domain, results, detailed)
 
-    else:
-        await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
+            # Send each part as a separate message
+            for text, parse_mode in parts:
+                if parse_mode:
+                    await context.bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode)
+                else:
+                    await context.bot.send_message(chat_id=chat_id, text=text)
+
+            if plan == "free":
+                c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
+                conn.commit()
+
+            # Exploitation proof for enterprise users (if XSS found)
+            if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
+                from bot.exploit_proof import capture_xss_proof
+                await capture_xss_proof(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
+        else:
+            await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
 
     context.user_data.pop("state", None)
     context.user_data.pop("scan_type", None)

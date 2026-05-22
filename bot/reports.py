@@ -1,4 +1,4 @@
-"""Multi‑code‑block report with safe code blocks."""
+"""Report generator that returns structured sections instead of one string."""
 import re
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -60,94 +60,85 @@ def compute_threat_score(results):
     return percent, level
 
 def clean_ansi(text):
-    """Remove terminal escape codes."""
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
-def safe_code_block(content, max_len=600):
-    """Return a Markdown code block with the content, after sanitising triple backticks."""
-    # Replace any ``` with ''' inside the content
-    safe_content = content.replace("```", "'''")
-    # Trim to max_len
-    if len(safe_content) > max_len:
-        safe_content = safe_content[:max_len]
-    return "```\n" + safe_content + "\n```"
-
-def format_summary(domain, results, detailed=False):
-    """Build the final report as a single Markdown string with separate code blocks."""
+def build_report_parts(domain, results, detailed=False):
+    """Return a list of (text, parse_mode, caption_hint) messages to send."""
+    parts = []
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
 
-    lines = []
-    lines.append(f"🔍 *Scan completed for {domain}*")
-    lines.append(f"{risk_emoji} Threat Score: *{score}/100*  |  Risk Level: *{level}*")
-    lines.append("━━━━━━━━━━━━━━━━━━")
+    # Header (plain text, no Markdown)
+    header = (
+        f"🔍 Scan completed for {domain}\n"
+        f"{risk_emoji} Threat Score: {score}/100  |  Risk Level: {level}\n"
+        "━━━━━━━━━━━━━━━━━━"
+    )
+    parts.append((header, None))  # no parse_mode
 
     # Compact summary
+    summary_lines = []
     if 'nmap' in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap",""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap","")))
-        lines.append(f"🛡️ *Nmap*: {ports} open ports, {vulns} potential vulns")
+        summary_lines.append(f"🛡️ Nmap: {ports} open ports, {vulns} potential vulns")
     if 'nikto' in results:
         issues = len(re.findall(r"\+ (.*)", results.get("nikto","")))
-        lines.append(f"🔥 *Nikto*: {issues} web issues")
+        summary_lines.append(f"🔥 Nikto: {issues} web issues")
     if 'whatweb' in results:
         clean = re.sub(r"\x1b\[[0-9;]*m", "", results.get("whatweb",""))
         servers = re.findall(r"HTTPServer\[ (.*?) \]", clean)
-        lines.append(f"🧩 *Technology*: {servers[0] if servers else 'No server header'}")
+        summary_lines.append(f"🧩 Technology: {servers[0] if servers else 'No server header'}")
     if 'theHarvester' in results:
         harvest = results["theHarvester"]
         if harvest == "No email":
-            lines.append("📧 *theHarvester*: No email set – skipped.")
+            summary_lines.append("📧 theHarvester: No email set – skipped.")
         elif "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-            lines.append(f"📧 *theHarvester*: {len(emails)} leaked emails found")
+            summary_lines.append(f"📧 theHarvester: {len(emails)} leaked emails found")
     if 'dnstwist' in results:
         registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get("dnstwist",""), re.MULTILINE))
-        lines.append(f"🕵️ *dnstwist*: {registered} typosquatting domains registered")
+        summary_lines.append(f"🕵️ dnstwist: {registered} typosquatting domains registered")
     if 'metagoofil' in results:
         if "No metadata" in results.get("metagoofil",""):
-            lines.append("📄 *Metagoofil*: No metadata leaks")
+            summary_lines.append("📄 Metagoofil: No metadata leaks")
         else:
-            lines.append("📄 *Metagoofil*: Metadata leaks found")
+            summary_lines.append("📄 Metagoofil: Metadata leaks found")
     if 'sherlock' in results:
         found = len(re.findall(r"\[\+\] (.*)", results.get("sherlock","")))
-        lines.append(f"👥 *Sherlock*: {found} social accounts found")
+        summary_lines.append(f"👥 Sherlock: {found} social accounts found")
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
-        lines.append("🦠 *Dalfox*: XSS vulnerabilities detected!")
+        summary_lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
 
-    # Paid detailed report
+    parts.append(("\n".join(summary_lines), None))
+
     if detailed:
-        lines.append("")
-        lines.append("📋 *DETAILED PAID REPORT*")
-        # Add code blocks for each tool
-        if 'nmap' in results and results['nmap'] and "Error" not in results['nmap']:
-            lines.append("🛡️ *Nmap*")
-            lines.append(safe_code_block(clean_ansi(results['nmap'])))
-        if 'nikto' in results and results['nikto'] and "Error" not in results['nikto']:
-            lines.append("🔥 *Nikto*")
-            lines.append(safe_code_block(clean_ansi(results['nikto'])))
-        if 'whatweb' in results and results['whatweb'] and "Error" not in results['whatweb']:
-            lines.append("🧩 *WhatWeb*")
-            lines.append(safe_code_block(clean_ansi(results['whatweb'])))
-        if 'theHarvester' in results and results['theHarvester'] not in ("No email", "No results", "", "Error"):
-            lines.append("📧 *theHarvester*")
-            lines.append(safe_code_block(clean_ansi(results['theHarvester'])))
-        if 'dnstwist' in results and results['dnstwist'] and "Error" not in results['dnstwist']:
-            lines.append("🕵️ *dnstwist*")
-            lines.append(safe_code_block(clean_ansi(results['dnstwist'])))
-        if 'metagoofil' in results and results['metagoofil'] and "No metadata" not in results['metagoofil']:
-            lines.append("📄 *Metagoofil*")
-            lines.append(safe_code_block(clean_ansi(results['metagoofil'])))
-        if 'sherlock' in results and results['sherlock'] and "Error" not in results['sherlock']:
-            lines.append("👥 *Sherlock*")
-            lines.append(safe_code_block(clean_ansi(results['sherlock'])))
-        if 'dalfox' in results and results['dalfox'] and "vulnerable" in results['dalfox'].lower():
-            lines.append("🦠 *Dalfox*")
-            lines.append(safe_code_block(clean_ansi(results['dalfox'])))
+        # Send a notice that detailed report follows
+        parts.append(("📋 DETAILED PAID REPORT", None))
 
-        # Compliance table
-        lines.append("")
-        lines.append("📜 *Compliance Status*")
+        # For each tool, create a separate code block message
+        tools = [
+            ("🛡️ Nmap", 'nmap'),
+            ("🔥 Nikto", 'nikto'),
+            ("🧩 WhatWeb", 'whatweb'),
+            ("📧 theHarvester", 'theHarvester'),
+            ("🕵️ dnstwist", 'dnstwist'),
+            ("📄 Metagoofil", 'metagoofil'),
+            ("👥 Sherlock", 'sherlock'),
+            ("🦠 Dalfox", 'dalfox'),
+        ]
+        for label, key in tools:
+            if key in results and results[key] and "Error" not in str(results[key]):
+                raw = clean_ansi(results[key])
+                if key == "theHarvester" and raw in ("No email", "No results"):
+                    continue
+                # Sanitise triple backticks inside content
+                safe = raw.replace("```", "'''")
+                block = f"```\n{safe[:800]}\n```"
+                parts.append((f"{label}\n{block}", "Markdown"))
+
+        # Compliance table as a code block
+        compliance_lines = ["COMPLIANCE STATUS"]
         for category, rules in COMPLIANCE.items():
             status = "✅"
             if category == "xss" and "dalfox" in results and "vulnerable" in results.get("dalfox","").lower():
@@ -164,11 +155,12 @@ def format_summary(domain, results, detailed=False):
                 status = "❌"
             elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")):
                 status = "❌"
-            lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
-        lines.append("")
-        lines.append("⚠️ For full compliance documentation, contact admin.")
+            compliance_lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
+        compliance_block = "```\n" + "\n".join(compliance_lines) + "\n```"
+        parts.append((compliance_block, "Markdown"))
+        parts.append(("⚠️ For full compliance documentation, contact admin.", None))
     else:
-        lines.append("")
-        lines.append("⚠️ This is a FREE summary. Upgrade to Monthly/Enterprise for detailed reports with compliance mapping and exploitation proof.")
+        parts.append(("", None))
+        parts.append((f"⚠️ This is a FREE summary. Upgrade for detailed reports.\nContact admin: @{ADMIN_USERNAME}", None))
 
-    return "\n".join(lines)
+    return parts
