@@ -77,7 +77,6 @@ async def scan_full_handler(update, context):
     if not is_active(username):
         await safe_edit(query, "⛔ Not authorized or trial expired.")
         return
-    # Set state BEFORE any edit, so even if edit fails the state is correct
     context.user_data["state"] = "SCAN_DOMAIN"
     context.user_data["scan_type"] = "full"
     context.user_data["tools"] = None
@@ -427,34 +426,38 @@ async def handle_scan_domain(update, context):
     except:
         pass
 
-        if results:
-            # Determine plan for paid features
-            c.execute("SELECT plan FROM clients WHERE username=?", (username,))
-            row = c.fetchone()
-            plan = row[0] if row else "free"
-            detailed = plan in ("monthly", "enterprise")
+    if results:
+        # Determine plan
+        c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+        row = c.fetchone()
+        plan = row[0] if row else "free"
+        detailed = plan in ("monthly", "enterprise")
 
-            # Build report parts (list of (text, parse_mode))
-            from bot.reports import build_report_parts
+        print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
+        try:
             parts = build_report_parts(domain, results, detailed)
-
-            # Send each part as a separate message
+            print(f"[DEBUG] Got {len(parts)} report parts")
             for text, parse_mode in parts:
                 if parse_mode:
                     await context.bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode)
                 else:
                     await context.bot.send_message(chat_id=chat_id, text=text)
+            print(f"[DEBUG] All parts sent successfully")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            await context.bot.send_message(chat_id=chat_id, text=f"❌ Report delivery failed: {e}")
 
-            if plan == "free":
-                c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
-                conn.commit()
+        if plan == "free":
+            c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
+            conn.commit()
 
-            # Exploitation proof for enterprise users (if XSS found)
-            if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
-                from bot.exploit_proof import capture_xss_proof
-                await capture_xss_proof(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
-        else:
-            await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
+        # Exploitation proof for enterprise
+        if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
+            from bot.exploit_proof import capture_xss_proof
+            await capture_xss_proof(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
+    else:
+        await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
 
     context.user_data.pop("state", None)
     context.user_data.pop("scan_type", None)
