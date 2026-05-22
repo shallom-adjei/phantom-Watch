@@ -125,9 +125,9 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
             }
             progress_callback(messages.get(step, f"Running {tool}..."))
         if tool == "nmap":
-            results["nmap"] = run_command(["nmap", "-sV", "-T4", "--top-ports", "200", domain])
+            results["nmap"] = run_command(["nmap", "-sV", "-T4", "-p-", "--script", "vuln,exploit,auth,default,discovery", domain], timeout=300)
         elif tool == "nikto":
-            results["nikto"] = run_command(["nikto", "-h", domain, "-T", "123bde", "-maxtime", "120s"])
+            results["nikto"] = run_command(["nikto", "-h", domain, "-T", "0123456789abcde", "-maxtime", "300s"], timeout=300)
         elif tool == "whatweb":
             results["whatweb"] = run_command(["whatweb", domain])
         elif tool == "theHarvester":
@@ -154,96 +154,149 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
                 results["metagoofil"] = "No metadata found"
         elif tool == "sherlock":
             company = domain.split(".")[0]
-            results["sherlock"] = run_command(["python3", "/home/runner/sherlock/sherlock.py", company, "--timeout", "10"])
+            results["sherlock"] = run_command(["python3", "/home/runner/sherlock/sherlock.py", company, "--timeout", "20"])
     return results
 
 # ---------- Report formatters ----------
+
+def compute_threat_score(results):
+    """Return (score, level) based on findings."""
+    score = 0
+    max_score = 0
+
+    if 'nmap' in results:
+        open_ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get('nmap',''), re.MULTILINE))
+        vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get('nmap','')))
+        score += (open_ports * 5) + (vulns * 15)
+        max_score += (10 * 5) + (10 * 15)
+
+    if 'nikto' in results:
+        issues = len(re.findall(r"\+ (.*)", results.get('nikto','')))
+        score += issues * 10
+        max_score += 10 * 10
+
+    if 'theHarvester' in results and results['theHarvester'] != "No email":
+        harvest = results['theHarvester']
+        if "<html" in harvest.lower():
+            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
+            score += len(emails) * 10
+            max_score += 20 * 10
+
+    if 'dnstwist' in results:
+        registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get('dnstwist',''), re.MULTILINE))
+        score += registered * 10
+        max_score += 10 * 10
+
+    if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
+        score += 25
+        max_score += 25
+
+    if 'sherlock' in results:
+        found = len(re.findall(r"\[\+\] (.*)", results.get('sherlock','')))
+        score += found * 5
+        max_score += 20 * 5
+
+    if 'dalfox' in results and "vulnerable" in results.get('dalfox','').lower():
+        score += 50
+        max_score += 50
+
+    if max_score == 0:
+        return 0, "LOW"
+
+    percent = min(100, int((score / max_score) * 100))
+
+    if percent < 10:
+        level = "LOW"
+    elif percent < 30:
+        level = "MEDIUM"
+    elif percent < 60:
+        level = "HIGH"
+    else:
+        level = "CRITICAL"
+
+    return percent, level
+
 def format_summary(domain, results):
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
     lines = [
         f"🔍 *Scan completed for {domain}*",
-        f"{risk_emoji} Threat Score: *{score}/100*  |  Risk Level: *{level}*\n"
+        f"{risk_emoji} Threat Score: *{score}/100*  |  Risk Level: *{level}*\n",
+        "━━━━━━━━━━━━━━━━━━" 
     ]
+    # Nmap
     if "nmap" in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap", ""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap", "")))
         if ports or vulns:
-            lines.append(f"🛡️ Nmap: {ports} open ports, {vulns} potential vulns")
+            lines.append(f"🛡️ *Nmap*: {ports} open ports, {vulns} potential vulns")
         else:
-            lines.append("🛡️ Nmap: No open ports or vulns found.")
+            lines.append("🛡️ *Nmap*: No open ports or vulns found.")
     else:
-        lines.append("🛡️ Nmap: Not run.")
+        lines.append("🛡️ *Nmap*: Not run.")
+    # Nikto
     if "nikto" in results:
         issues = len(re.findall(r"\+ (.*)", results.get("nikto", "")))
         if issues:
-            lines.append(f"🔥 Nikto: {issues} web issues")
+            lines.append(f"🔥 *Nikto*: {issues} web issues")
         else:
-            lines.append("🔥 Nikto: No web issues found.")
+            lines.append("🔥 *Nikto*: No web issues found.")
     else:
-        lines.append("🔥 Nikto: Not run.")
+        lines.append("🔥 *Nikto*: Not run.")
+    # WhatWeb
     if "whatweb" in results:
         clean = re.sub(r"\x1b\[[0-9;]*m", "", results.get("whatweb", ""))
         servers = re.findall(r"HTTPServer\[ (.*?) \]", clean)
         if servers:
-            lines.append(f"🧩 Technology: {servers[0]}")
+            lines.append(f"🧩 *Technology*: {servers[0]}")
         else:
-            lines.append("🧩 Technology: No server header detected.")
+            lines.append("🧩 *Technology*: No server header detected.")
     else:
-        lines.append("🧩 Technology: Not run.")
+        lines.append("🧩 *Technology*: Not run.")
+    # theHarvester
     if "theHarvester" in results:
         harvest = results["theHarvester"]
         if harvest == "No email":
-            lines.append("📧 theHarvester: No email set – skipped.")
+            lines.append("📧 *theHarvester*: No email set – skipped.")
         elif "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
             if emails:
-                lines.append(f"📧 Emails leaked: {len(emails)}")
+                lines.append(f"📧 *theHarvester*: {len(emails)} leaked emails found")
             else:
-                lines.append("📧 theHarvester: No leaked emails found.")
+                lines.append("📧 *theHarvester*: No leaked emails found.")
         else:
-            lines.append("📧 theHarvester: No results.")
+            lines.append("📧 *theHarvester*: No results.")
     else:
-        lines.append("📧 theHarvester: Not run.")
+        lines.append("📧 *theHarvester*: Not run.")
+    # dnstwist
     if "dnstwist" in results:
         registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get("dnstwist", ""), re.MULTILINE))
         if registered:
-            lines.append(f"🕵️ Typosquatting: {registered} domains registered")
+            lines.append(f"🕵️ *dnstwist*: {registered} typosquatting domains registered")
         else:
-            lines.append("🕵️ Typosquatting: No similar domains registered.")
+            lines.append("🕵️ *dnstwist*: No similar domains registered.")
     else:
-        lines.append("🕵️ dnstwist: Not run.")
+        lines.append("🕵️ *dnstwist*: Not run.")
+    # Metagoofil
     if "metagoofil" in results:
         if "No metadata" in results.get("metagoofil", ""):
-            lines.append("📄 Metagoofil: No metadata leaks found.")
+            lines.append("📄 *Metagoofil*: No metadata leaks found.")
         else:
-            lines.append("📄 Document metadata leaks found")
+            lines.append("📄 *Metagoofil*: Document metadata leaks found")
     else:
-        lines.append("📄 Metagoofil: Not run.")
+        lines.append("📄 *Metagoofil*: Not run.")
+    # Sherlock
     if "sherlock" in results:
         found = len(re.findall(r"\[\+\] (.*)", results.get("sherlock", "")))
         if found:
-            lines.append(f"👥 Social media: {found} accounts found")
+            lines.append(f"👥 *Sherlock*: {found} social media accounts found")
         else:
-            lines.append("👥 Social media: No accounts found.")
+            lines.append("👥 *Sherlock*: No accounts found.")
     else:
-        lines.append("👥 Sherlock: Not run.")
-    lines.append("\n⚠️ Upgrade to Monthly/Enterprise for full PDF reports & compliance mapping.")
+        lines.append("👥 *Sherlock*: Not run.")
+    lines.append("")
+    lines.append("⚠️ Upgrade to Monthly/Enterprise for full PDF reports & compliance mapping.")
     return "\n".join(lines)
-
-
-COMPLIANCE = {
-    "xss": {"pci": "PCI-DSS 6.5.7", "hipaa": "164.308(a)(5)(ii)(B)"},
-    "sqli": {"pci": "PCI-DSS 6.5.1", "hipaa": "164.308(a)(5)(ii)(B)"},
-    "open_port": {"pci": "PCI-DSS 1.1.6", "hipaa": "164.308(a)(4)(ii)(B)"},
-    "vulnerable_service": {"pci": "PCI-DSS 6.1", "hipaa": "164.308(a)(5)(ii)(B)"},
-    "leaked_email": {"pci": "PCI-DSS 6.5.10", "hipaa": "164.308(a)(5)(ii)(B)"},
-    "typosquatting": {"pci": "N/A", "hipaa": "164.308(a)(5)(ii)(B)"},
-    "metadata_leak": {"pci": "PCI-DSS 6.5.9", "hipaa": "164.308(a)(1)(ii)(D)"},
-    "social_media": {"pci": "N/A", "hipaa": "164.308(a)(5)(ii)(B)"},
-}
-
-
 def generate_pdf_report(domain, results, plan):
     pdf = FPDF()
     pdf.add_page()
@@ -378,6 +431,7 @@ def admin_menu():
     ])
 
 
+menu_button = ReplyKeyboardMarkup([[KeyboardButton("🛡️ Menu")]], resize_keyboard=True)
 def quick_scan_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🛡️ Ports & Vulns", callback_data="quick_ports"),
