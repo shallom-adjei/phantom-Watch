@@ -426,6 +426,7 @@ async def handle_scan_domain(update, context):
             row = c.fetchone()
             plan = row[0] if row else "free"
             detailed = plan in ("monthly", "enterprise")
+            print(f"[DEBUG] About to send summary for {domain}, results={bool(results)}")
             summary = format_summary(domain, results, detailed)
             await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
 
