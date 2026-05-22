@@ -1,4 +1,4 @@
-"""Professional terminal‑style report with detailed exploitation/remediation for paid users."""
+"""Multi‑code‑block report: each tool's output in its own gray copyable box."""
 import re
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -59,143 +59,110 @@ def compute_threat_score(results):
         level = "CRITICAL"
     return percent, level
 
-def detailed_findings_plain(results):
-    """Return list of plain‑text finding lines (exploitation & remediation)."""
-    lines = []
-    if 'nmap' in results:
-        open_ports = re.findall(r"^\d+/tcp\s+open\s+(.*)", results['nmap'], re.MULTILINE)
-        vulns = re.findall(r"\|.*VULNERABLE.*", results['nmap'])
-        if open_ports or vulns:
-            lines.append("[NMAP]")
-            if open_ports:
-                lines.append("  Open Ports:")
-                for p in open_ports[:5]:
-                    lines.append(f"    - {p}")
-            if vulns:
-                lines.append("  Vulnerabilities:")
-                for v in vulns[:5]:
-                    lines.append(f"    - {v.strip()}")
-            lines.append("  Exploit: Brute‑force, outdated services, remote code execution.")
-            lines.append("  Fix: Close unused ports, firewall, apply patches.\n")
-        else:
-            lines.append("[NMAP] No open ports or vulns detected.\n")
-
-    if 'nikto' in results:
-        issues = re.findall(r"\+ (.*)", results['nikto'])
-        if issues:
-            lines.append("[NIKTO]")
-            for i in issues[:5]:
-                lines.append(f"  - {i}")
-            lines.append("  Exploit: Injection, data leak, defacement.")
-            lines.append("  Fix: Update CMS/plugins, add CSP/X‑Frame‑Options.\n")
-        else:
-            lines.append("[NIKTO] No web issues found.\n")
-
-    if 'theHarvester' in results and results['theHarvester'] != "No email":
-        harvest = results['theHarvester']
-        if "<html" in harvest.lower():
-            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-            if emails:
-                lines.append("[EMAIL]")
-                lines.append(f"  Leaked Emails: {len(emails)}")
-                lines.append(f"  {', '.join(emails[:5])}")
-                lines.append("  Exploit: Phishing, credential stuffing.")
-                lines.append("  Fix: SPF/DKIM/DMARC, staff training.\n")
-
-    if 'dnstwist' in results:
-        registered = re.findall(r"^([^ ]+)\s+registered.*", results['dnstwist'], re.MULTILINE)
-        if registered:
-            lines.append("[TYPO]")
-            lines.append("  Squatting domains:")
-            for d in registered[:5]:
-                lines.append(f"    - {d}")
-            lines.append("  Exploit: Phishing, credential theft.")
-            lines.append("  Fix: Monitor registrations, buy variants.\n")
-        else:
-            lines.append("[TYPO] No typosquatting domains.\n")
-
-    if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
-        lines.append("[META] Metadata leaks found.")
-        lines.append("  Exploit: Internal path/software exposure.")
-        lines.append("  Fix: Strip metadata before publishing.\n")
-    else:
-        lines.append("[META] No metadata leaks.\n")
-
-    if 'sherlock' in results:
-        found = re.findall(r"\[\+\] (.*)", results['sherlock'])
-        if found:
-            lines.append("[SOCIAL]")
-            lines.append("  Accounts found:")
-            for f in found[:5]:
-                lines.append(f"    - {f}")
-            lines.append("  Exploit: Impersonation, social engineering.")
-            lines.append("  Fix: Enable 2FA, review privacy settings.\n")
-        else:
-            lines.append("[SOCIAL] No social accounts found.\n")
-
-    if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
-        lines.append("[XSS] XSS vulnerabilities detected!")
-        lines.append("  Exploit: Inject malicious scripts.")
-        lines.append("  Fix: Sanitise input, use Content‑Security‑Policy.\n")
-
-    return lines
+def clean_ansi(text):
+    """Remove terminal escape codes."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 def format_summary(domain, results, detailed=False):
-    """Build the terminal‑style report in a single code block."""
+    """Build the final report with separate code blocks for each tool."""
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
 
     lines = []
-    lines.append("```")
-    lines.append(f"PHANTOM WATCH SCAN REPORT")
-    lines.append(f"Domain : {domain}")
-    lines.append(f"Date   : {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    lines.append(f"Score  : {score}/100 ({level}) {risk_emoji}")
-    lines.append("=" * 40)
+    # Header
+    lines.append(f"🔍 *Scan completed for {domain}*")
+    lines.append(f"{risk_emoji} Threat Score: *{score}/100*  |  Risk Level: *{level}*")
+    lines.append("━━━━━━━━━━━━━━━━━━")
 
-    # Compact summary
+    # Compact summary (brief)
     if 'nmap' in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap",""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap","")))
-        lines.append(f"[nmap]   ports: {ports}, vulns: {vulns}")
+        lines.append(f"🛡️ *Nmap*: {ports} open ports, {vulns} potential vulns")
     if 'nikto' in results:
         issues = len(re.findall(r"\+ (.*)", results.get("nikto","")))
-        lines.append(f"[nikto]  issues: {issues}")
+        lines.append(f"🔥 *Nikto*: {issues} web issues")
     if 'whatweb' in results:
         clean = re.sub(r"\x1b\[[0-9;]*m", "", results.get("whatweb",""))
-        server = re.findall(r"HTTPServer\[ (.*?) \]", clean)
-        lines.append(f"[whatweb] server: {server[0] if server else 'unknown'}")
+        servers = re.findall(r"HTTPServer\[ (.*?) \]", clean)
+        lines.append(f"🧩 *Technology*: {servers[0] if servers else 'No server header'}")
     if 'theHarvester' in results:
-        if results['theHarvester'] == "No email":
-            lines.append("[harvester] skipped (no email)")
-        else:
-            harvest = results['theHarvester']
-            if "<html" in harvest.lower():
-                emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-                lines.append(f"[harvester] emails: {len(emails)}")
-            else:
-                lines.append("[harvester] no results")
+        harvest = results["theHarvester"]
+        if harvest == "No email":
+            lines.append("📧 *theHarvester*: No email set – skipped.")
+        elif "<html" in harvest.lower():
+            emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
+            lines.append(f"📧 *theHarvester*: {len(emails)} leaked emails found")
     if 'dnstwist' in results:
         registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get("dnstwist",""), re.MULTILINE))
-        lines.append(f"[dnstwist] domains: {registered}")
+        lines.append(f"🕵️ *dnstwist*: {registered} typosquatting domains registered")
     if 'metagoofil' in results:
         if "No metadata" in results.get("metagoofil",""):
-            lines.append("[metagoofil] no leaks")
+            lines.append("📄 *Metagoofil*: No metadata leaks")
         else:
-            lines.append("[metagoofil] leaks found")
+            lines.append("📄 *Metagoofil*: Metadata leaks found")
     if 'sherlock' in results:
         found = len(re.findall(r"\[\+\] (.*)", results.get("sherlock","")))
-        lines.append(f"[sherlock] accounts: {found}")
+        lines.append(f"👥 *Sherlock*: {found} social accounts found")
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
-        lines.append("[dalfox] XSS found!")
+        lines.append("🦠 *Dalfox*: XSS vulnerabilities detected!")
 
-    lines.append("")
-
+    # If paid, add detailed blocks for each tool
     if detailed:
-        # Detailed exploitation/remediation
-        lines.extend(detailed_findings_plain(results))
-        # Compliance
-        lines.append("[COMPLIANCE]")
+        lines.append("")
+        lines.append("📋 *DETAILED PAID REPORT*")
+        # Nmap
+        if 'nmap' in results and results['nmap']:
+            lines.append("🛡️ *Nmap*")
+            lines.append("```")
+            lines.append(clean_ansi(results['nmap'][:600]))
+            lines.append("```")
+        # Nikto
+        if 'nikto' in results and results['nikto']:
+            lines.append("🔥 *Nikto*")
+            lines.append("```")
+            lines.append(clean_ansi(results['nikto'][:600]))
+            lines.append("```")
+        # WhatWeb
+        if 'whatweb' in results and results['whatweb']:
+            lines.append("🧩 *WhatWeb*")
+            lines.append("```")
+            lines.append(clean_ansi(results['whatweb'][:400]))
+            lines.append("```")
+        # theHarvester
+        if 'theHarvester' in results and results['theHarvester'] not in ("No email", "No results", ""):
+            lines.append("📧 *theHarvester*")
+            lines.append("```")
+            lines.append(clean_ansi(results['theHarvester'][:400]))
+            lines.append("```")
+        # dnstwist
+        if 'dnstwist' in results and results['dnstwist']:
+            lines.append("🕵️ *dnstwist*")
+            lines.append("```")
+            lines.append(clean_ansi(results['dnstwist'][:400]))
+            lines.append("```")
+        # Metagoofil
+        if 'metagoofil' in results and results['metagoofil'] and "No metadata" not in results['metagoofil']:
+            lines.append("📄 *Metagoofil*")
+            lines.append("```")
+            lines.append(clean_ansi(results['metagoofil'][:400]))
+            lines.append("```")
+        # Sherlock
+        if 'sherlock' in results and results['sherlock']:
+            lines.append("👥 *Sherlock*")
+            lines.append("```")
+            lines.append(clean_ansi(results['sherlock'][:400]))
+            lines.append("```")
+        # Dalfox
+        if 'dalfox' in results and results['dalfox'] and "vulnerable" in results['dalfox'].lower():
+            lines.append("🦠 *Dalfox*")
+            lines.append("```")
+            lines.append(clean_ansi(results['dalfox'][:400]))
+            lines.append("```")
+
+        # Compliance table
+        lines.append("")
+        lines.append("📜 *Compliance Status*")
         for category, rules in COMPLIANCE.items():
             status = "✅"
             if category == "xss" and "dalfox" in results and "vulnerable" in results.get("dalfox","").lower():
@@ -212,12 +179,11 @@ def format_summary(domain, results, detailed=False):
                 status = "❌"
             elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")):
                 status = "❌"
-            lines.append(f"  {status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
+            lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
         lines.append("")
-        lines.append("⚠ For full compliance documentation, contact admin.")
+        lines.append("⚠️ For full compliance documentation, contact admin.")
     else:
-        lines.append("ℹ FREE summary. Upgrade for detailed findings & compliance mapping.")
-        lines.append(f"  Contact admin: @{ADMIN_USERNAME}")
+        lines.append("")
+        lines.append("⚠️ This is a FREE summary. Upgrade to Monthly/Enterprise for detailed reports with compliance mapping and exploitation proof.")
 
-    lines.append("```")
     return "\n".join(lines)
