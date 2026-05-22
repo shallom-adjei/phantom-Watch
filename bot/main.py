@@ -45,6 +45,7 @@ async def button_router(update, context):
         await handler(update, context)
 async def message_router(update, context):
     username = update.message.from_user.username
+    print(f"[DEBUG] message_router: username={update.message.from_user.username}, state={context.user_data.get("state")}")
     state = context.user_data.get("state")
 
     # Admin wizards
