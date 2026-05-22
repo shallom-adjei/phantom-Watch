@@ -1,4 +1,4 @@
-"""Single‑message report with multiple code blocks."""
+"""Single‑message report with compact code blocks."""
 import re
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -63,13 +63,13 @@ def clean_ansi(text):
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 def build_report_markdown(domain, results, detailed=False):
-    """Return a single Markdown string containing all report parts."""
+    """Return a single Markdown string with compact code blocks."""
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
 
     lines = []
 
-    # Header (no Markdown required, but we can use plain text with emojis)
+    # Header
     lines.append(f"🔍 Scan completed for {domain}")
     lines.append(f"{risk_emoji} Threat Score: {score}/100  |  Risk Level: {level}")
     lines.append("━━━━━━━━━━━━━━━━━━")
@@ -107,9 +107,8 @@ def build_report_markdown(domain, results, detailed=False):
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
         lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
 
-    # For paid users, append detailed code blocks
     if detailed:
-        lines.append("")  # blank line before detailed section
+        lines.append("")  # one blank line before detailed section
 
         tools = [
             ("🛡️ Nmap", 'nmap'),
@@ -126,17 +125,14 @@ def build_report_markdown(domain, results, detailed=False):
                 raw = clean_ansi(results[key])
                 if key == "theHarvester" and raw in ("No email", "No results"):
                     continue
-                # Sanitize triple backticks inside content
                 safe = raw.replace("```", "'''")
-                # Truncate to save space (300 chars)
                 snippet = safe[:300]
                 lines.append(label)
                 lines.append("```")
                 lines.append(snippet)
                 lines.append("```")
-                lines.append("")  # spacing
 
-        # Compliance table as a code block
+        # Compliance table in a code block
         compliance_lines = ["COMPLIANCE STATUS"]
         for category, rules in COMPLIANCE.items():
             status = "✅"
