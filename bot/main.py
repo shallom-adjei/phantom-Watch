@@ -10,12 +10,10 @@ from bot.handlers_admin import (
     admin_menu_handler, admin_adduser_handler, admin_verify_handler,
     admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
 )
-import os, asyncio
 from bot.config import BOT_TOKEN, ADMIN_USERNAME
 from bot.menus import main_menu
+import traceback
 
-
-# Route table
 CALLBACK_ROUTES = {
     "main_menu": main_menu_handler,
     "scan_full": scan_full_handler,
@@ -42,34 +40,54 @@ async def button_router(update, context):
         return
     handler = CALLBACK_ROUTES.get(data)
     if handler:
-        await handler(update, context)
+        try:
+            await handler(update, context)
+        except Exception as e:
+            print(f"[ERROR] Callback {data} crashed: {e}")
+            traceback.print_exc()
+    else:
+        print(f"[WARN] No handler for callback: {data}")
+
 async def message_router(update, context):
     username = update.message.from_user.username
-    print(f"[DEBUG] message_router: username={update.message.from_user.username}, state={context.user_data.get("state")}")
+    text = update.message.text.strip()
     state = context.user_data.get("state")
+    print(f"[DEBUG] msg_router: username={username}, state={state}, text={text[:50]}")
 
     # Admin wizards
     if state in ("ADDUSER_USERNAME", "ADDUSER_PLAN", "ADDUSER_MONTHS",
                  "VERIFY_USERNAME", "VERIFY_DOMAIN", "REMOVE_USER"):
-        handled = await handle_admin_wizard(update, context)
-        if handled:
+        try:
+            handled = await handle_admin_wizard(update, context)
+            if handled:
+                return
+        except Exception as e:
+            print(f"[ERROR] Admin wizard crashed: {e}")
+            traceback.print_exc()
             return
 
     # Client states
-    handled = await handle_client_message(update, context)
-    if handled:
+    try:
+        handled = await handle_client_message(update, context)
+        if handled:
+            return
+    except Exception as e:
+        print(f"[ERROR] Client message crashed: {e}")
+        traceback.print_exc()
         return
 
     # Scan domain state
     if state == "SCAN_DOMAIN":
+        print(f"[DEBUG] Forwarding to handle_scan_domain")
         try:
             handled = await handle_scan_domain(update, context)
+            if handled:
+                return
         except Exception as e:
             print(f"[ERROR] handle_scan_domain crashed: {e}")
-            import traceback
             traceback.print_exc()
-            handled = False
-        if handled:
+            await update.message.reply_text("❌ Scan encountered an internal error.")
+            context.user_data.pop("state", None)
             return
 
     # Fallback

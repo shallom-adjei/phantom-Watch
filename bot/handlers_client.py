@@ -1,13 +1,20 @@
 """Client‑facing button handlers."""
-import asyncio, os, re, json, random, shutil, time, subprocess
+import asyncio, os, re, json, random, shutil, time, subprocess, traceback
 from datetime import datetime
 import requests
-from bot.database import is_active, is_client, generate_token, verify_domain, conn, c
-from bot.config import ADMIN_USERNAME
+from bot.database import is_active, is_client, generate_token, verify_domain, conn, c, ADMIN_USERNAME
 from bot.scanners import run_scan
 from bot.reports import format_summary
 from bot.menus import main_menu, admin_menu
 
+# ---------- safe message editing ----------
+async def safe_edit(query, text, **kwargs):
+    try:
+        await query.edit_message_text(text, **kwargs)
+    except Exception:
+        pass  # silently ignore all edit failures
+
+# ---------- breach check ----------
 async def check_breach(email: str, context, chat_id: int):
     try:
         resp = requests.get(
@@ -32,7 +39,7 @@ async def check_breach(email: str, context, chat_id: int):
         pass
     await context.bot.send_message(chat_id=chat_id, text="✅ No breaches found for this email.")
 
-# Handlers for each callback
+# ---------- callback handlers ----------
 async def start_command(update, context):
     from bot.menus import menu_button
     await update.message.reply_text(
@@ -67,17 +74,13 @@ async def scan_full_handler(update, context):
         pass
     username = query.from_user.username
     if not is_active(username):
-        await query.edit_message_text("⛔ Not authorized or trial expired.")
+        await safe_edit(query, "⛔ Not authorized or trial expired.")
         return
+    # Set state BEFORE any edit, so even if edit fails the state is correct
+    context.user_data["state"] = "SCAN_DOMAIN"
     context.user_data["scan_type"] = "full"
     context.user_data["tools"] = None
-    try:
-        await query.edit_message_text("📌 Send the domain name to scan.")
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
-    context.user_data["state"] = "SCAN_DOMAIN"
-    print(f"[DEBUG] State set to SCAN_DOMAIN for {username}")
+    await safe_edit(query, "📌 Send the domain name to scan.")
 
 async def scan_quick_handler(update, context):
     query = update.callback_query
@@ -87,14 +90,10 @@ async def scan_quick_handler(update, context):
         pass
     username = query.from_user.username
     if not is_active(username):
-        await query.edit_message_text("⛔ Not authorized or trial expired.")
+        await safe_edit(query, "⛔ Not authorized or trial expired.")
         return
     from bot.menus import quick_scan_menu
-    try:
-        await query.edit_message_text("Choose a quick scan type:", reply_markup=quick_scan_menu())
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
+    await safe_edit(query, "Choose a quick scan type:", reply_markup=quick_scan_menu())
 
 async def quick_scan_subhandler(update, context):
     query = update.callback_query
@@ -105,7 +104,7 @@ async def quick_scan_subhandler(update, context):
     data = query.data
     username = query.from_user.username
     if not is_active(username):
-        await query.edit_message_text("⛔ Not authorized or trial expired.")
+        await safe_edit(query, "⛔ Not authorized or trial expired.")
         return
     if data == "quick_ports":
         tools = ["nmap", "nikto"]
@@ -115,15 +114,10 @@ async def quick_scan_subhandler(update, context):
         tools = ["whatweb", "dnstwist", "metagoofil"]
     elif data == "quick_xss":
         tools = ["dalfox"]
+    context.user_data["state"] = "SCAN_DOMAIN"
     context.user_data["tools"] = tools
     context.user_data["scan_type"] = "quick"
-    try:
-        await query.edit_message_text("📌 Send the domain name to scan.")
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
-    context.user_data["state"] = "SCAN_DOMAIN"
-    print(f"[DEBUG] State set to SCAN_DOMAIN for {username}")
+    await safe_edit(query, "📌 Send the domain name to scan.")
 
 async def set_email_handler(update, context):
     query = update.callback_query
@@ -131,11 +125,7 @@ async def set_email_handler(update, context):
         await query.answer()
     except:
         pass
-    try:
-        await query.edit_message_text("📧 Please send your email address:")
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
+    await safe_edit(query, "📧 Please send your email address:")
     context.user_data["state"] = "SET_EMAIL"
 
 async def pricing_handler(update, context):
@@ -180,11 +170,7 @@ async def pricing_handler(update, context):
         "Contact the admin to activate your plan."
     )
     await context.bot.send_message(chat_id=query.message.chat_id, text=pricing_text, parse_mode="Markdown")
-    try:
-        await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
+    await safe_edit(query, "🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
 
 async def how_it_works_handler(update, context):
     query = update.callback_query
@@ -228,11 +214,7 @@ async def how_it_works_handler(update, context):
         "Exploitation proof • Advanced OSINT • GitHub secret scanning • Priority monitoring"
     )
     await context.bot.send_message(chat_id=query.message.chat_id, text=how_text, parse_mode="Markdown")
-    try:
-        await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
+    await safe_edit(query, "🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
 
 async def check_breaches_handler(update, context):
     query = update.callback_query
@@ -242,15 +224,15 @@ async def check_breaches_handler(update, context):
         pass
     username = query.from_user.username
     if not is_active(username):
-        await query.edit_message_text("⛔ Not authorized or trial expired.")
+        await safe_edit(query, "⛔ Not authorized or trial expired.")
         return
     c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
     row = c.fetchone()
     email = row[0] if row else ""
     if not email:
-        await query.edit_message_text("📧 Please set your email first using the *Set Email* button.")
+        await safe_edit(query, "📧 Please set your email first using the *Set Email* button.")
     else:
-        await query.edit_message_text("🩸 Checking breaches...")
+        await safe_edit(query, "🩸 Checking breaches...")
         await check_breach(email, context, query.message.chat_id)
 
 async def subscribe_handler(update, context):
@@ -261,13 +243,9 @@ async def subscribe_handler(update, context):
         pass
     username = query.from_user.username
     if not is_active(username):
-        await query.edit_message_text("⛔ Not authorized or trial expired.")
+        await safe_edit(query, "⛔ Not authorized or trial expired.")
         return
-    try:
-        await query.edit_message_text("📌 Send the domain you want to monitor weekly:")
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
+    await safe_edit(query, "📌 Send the domain you want to monitor weekly:")
     context.user_data["state"] = "SUBSCRIBE_DOMAIN"
 
 async def github_scan_handler(update, context):
@@ -278,13 +256,9 @@ async def github_scan_handler(update, context):
         pass
     username = query.from_user.username
     if not is_client(username):
-        await query.edit_message_text("🔑 This feature requires Enterprise plan.")
+        await safe_edit(query, "🔑 This feature requires Enterprise plan.")
         return
-    try:
-        await query.edit_message_text("🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):")
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
+    await safe_edit(query, "🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):")
     context.user_data["state"] = "GITHUB_SCAN"
 
 async def help_handler(update, context):
@@ -311,11 +285,7 @@ async def help_handler(update, context):
         "PDF reports • Compliance mapping • Advanced scans"
     )
     await context.bot.send_message(chat_id=query.message.chat_id, text=help_text, parse_mode="Markdown")
-    try:
-        await query.edit_message_text("🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
+    await safe_edit(query, "🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
 
 async def contact_admin_handler(update, context):
     query = update.callback_query
@@ -325,11 +295,7 @@ async def contact_admin_handler(update, context):
         pass
     username = query.from_user.username
     msg = f"📩 Contact the admin directly: @{ADMIN_USERNAME}\n\n👉 https://t.me/{ADMIN_USERNAME}"
-    try:
-        await query.edit_message_text(msg)
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
+    await safe_edit(query, msg)
 
 async def main_menu_handler(update, context):
     query = update.callback_query
@@ -338,13 +304,9 @@ async def main_menu_handler(update, context):
     except:
         pass
     username = query.from_user.username
-    try:
-        await query.edit_message_text("⬇️ Main Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            print(f"Edit error: {e}")
+    await safe_edit(query, "⬇️ Main Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
 
-# Message handler for client states
+# ---------- message handlers ----------
 async def handle_client_message(update, context):
     username = update.message.from_user.username
     text = update.message.text.strip()
@@ -403,9 +365,8 @@ async def handle_client_message(update, context):
 
     return False
 
-# Scan domain handler
+# ---------- scan domain handler ----------
 async def handle_scan_domain(update, context):
-    print(f"[DEBUG] handle_scan_domain called with state={context.user_data.get('state')}")
     username = update.message.from_user.username
     domain = update.message.text.strip().lower()
     if not re.match(r"^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$", domain):
@@ -453,36 +414,44 @@ async def handle_scan_domain(update, context):
     email = row[0] if row else ""
     tools = context.user_data.get("tools", None)
 
-    results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools)
+    try:
+        results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools)
+    except Exception as e:
+        traceback.print_exc()
+        await update.message.reply_text(f"❌ Scan crashed: {e}")
+        results = None
 
     try:
         await progress_msg.delete()
     except:
         pass
 
-        if results:
-            c.execute("SELECT plan FROM clients WHERE username=?", (username,))
-            row = c.fetchone()
-            plan = row[0] if row else "free"
-            detailed = plan in ("monthly", "enterprise")
-            print(f"[DEBUG] About to send summary for {domain}, results={bool(results)}")
+    if results:
+        c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+        row = c.fetchone()
+        plan = row[0] if row else "free"
+        detailed = plan in ("monthly", "enterprise")
+        try:
             summary = format_summary(domain, results, detailed)
             await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
+        except Exception as e:
+            print(f"[ERROR] Failed to send report: {e}")
+            await context.bot.send_message(chat_id=chat_id, text="⚠️ Report generation failed. Please contact admin.")
 
-            if plan == "free":
-                c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
-                conn.commit()
+        if plan == "free":
+            c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
+            conn.commit()
 
-            # Exploitation proof for enterprise users (if XSS found)
-            if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
-                from bot.exploit_proof import capture_xss_proof
-                await capture_xss_proof(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
+        # Exploitation proof for enterprise users (if XSS found)
+        if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
+            from bot.exploit_proof import capture_xss_proof
+            await capture_xss_proof(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
 
-        else:
-            await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
+    else:
+        await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
 
-        context.user_data.pop("state", None)
-        context.user_data.pop("scan_type", None)
-        context.user_data.pop("tools", None)
-        await update.message.reply_text("🔮 What's next?", reply_markup=main_menu(username == ADMIN_USERNAME))
-        return True
+    context.user_data.pop("state", None)
+    context.user_data.pop("scan_type", None)
+    context.user_data.pop("tools", None)
+    await update.message.reply_text("🔮 What's next?", reply_markup=main_menu(username == ADMIN_USERNAME))
+    return True
