@@ -114,14 +114,14 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
         if progress_callback:
             progress_callback(f"Running {tool}...")
         if tool == "nmap":
-            results["nmap"] = run_command(f"nmap -sV -T4 --top-ports 200 {domain}")
+            results["nmap"] = run_command(["nmap", "-sV", "-T4", "--top-ports", "200", domain])
         elif tool == "nikto":
-            results["nikto"] = run_command(f"nikto -h {domain} -T 123bde -maxtime 120s")
+            results["nikto"] = run_command(["nikto", "-h", domain, "-T", "123bde", "-maxtime", "120s"])
         elif tool == "whatweb":
-            results["whatweb"] = run_command(f"whatweb {domain}")
+            results["whatweb"] = run_command(["whatweb", domain])
         elif tool == "theHarvester":
             if email:
-                run_command(f"theHarvester -d {domain} -b google -f report_{domain}.html")
+                run_command(["theHarvester", "-d", domain, "-b", "google", "-f", f"report_{domain}.html"])
                 if os.path.exists(f"report_{domain}.html"):
                     with open(f"report_{domain}.html") as f:
                         results["theHarvester"] = f.read()
@@ -131,7 +131,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
             else:
                 results["theHarvester"] = "No email"
         elif tool == "dnstwist":
-            results["dnstwist"] = run_command(f"dnstwist {domain}")
+            results["dnstwist"] = run_command(["dnstwist", domain])
         elif tool == "metagoofil":
             raw = run_command(f"cd /home/runner/metagoofil && python3 metagoofil.py -d {domain} -t pdf,doc,xls -l 10 -n 5 -o /tmp/meta_{domain} -f meta_{domain}.html", timeout=300)
             meta_report = f"/tmp/meta_{domain}/meta_{domain}.html"
@@ -143,7 +143,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None):
                 results["metagoofil"] = "No metadata found"
         elif tool == "sherlock":
             company = domain.split(".")[0]
-            results["sherlock"] = run_command(f"cd /home/runner/sherlock && python3 sherlock.py {company} --timeout 10")
+            results["sherlock"] = run_command(["python3", "/home/runner/sherlock/sherlock.py", company, "--timeout", "10"])
     return results
 
 # ---------- Report formatters ----------
