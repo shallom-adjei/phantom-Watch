@@ -216,7 +216,7 @@ def compute_threat_score(results):
         level = "CRITICAL"
     return percent, level
 
-def format_summary(domain, results):
+def format_summary(domain, results, detailed=False):
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
     lines = [
@@ -846,7 +846,11 @@ async def message_handler(update, context):
             pass
 
         if results:
-            summary = format_summary(domain, results)
+            c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+            row = c.fetchone()
+            plan = row[0] if row else "free"
+            detailed = plan in ("monthly", "enterprise")
+            summary = format_summary(domain, results, detailed)
             await context.bot.send_message(chat_id=chat_id, text=summary, parse_mode="Markdown")
 
             # Mark free plan as used
