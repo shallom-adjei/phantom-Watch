@@ -711,7 +711,7 @@ async def button_handler(update, context):
 
     if data == "contact_admin":
         admin_link = f"https://t.me/{ADMIN_USERNAME}"
-        msg = f"📩 Contact the admin directly: @{ADMIN_USERNAME}
+        msg = f"📩 Contact the admin directly: @{ADMIN_USERNAME}\n\n👉 {admin_link}"
 
 👉 {admin_link}"
         try:
