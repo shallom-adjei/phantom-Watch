@@ -1,10 +1,28 @@
-"""Database helpers."""
 import sqlite3
 from datetime import datetime, timedelta
 
 DB_FILE = "phantom_clients.db"
 conn = sqlite3.connect(DB_FILE, check_same_thread=False)
 c = conn.cursor()
+
+# Create tables
+c.execute("""CREATE TABLE IF NOT EXISTS clients (
+    username TEXT PRIMARY KEY,
+    plan TEXT DEFAULT 'free',
+    expiry TEXT,
+    email_collect TEXT DEFAULT '',
+    scan_used INTEGER DEFAULT 0
+)""")
+c.execute("""CREATE TABLE IF NOT EXISTS verification (
+    username TEXT, domain TEXT, token TEXT,
+    PRIMARY KEY(username, domain)
+)""")
+c.execute("""CREATE TABLE IF NOT EXISTS subscriptions (
+    username TEXT, domain TEXT,
+    last_scan_time TEXT, last_report_json TEXT,
+    PRIMARY KEY(username, domain)
+)""")
+conn.commit()
 
 def is_client(username: str) -> bool:
     c.execute("SELECT 1 FROM clients WHERE username=?", (username,))
