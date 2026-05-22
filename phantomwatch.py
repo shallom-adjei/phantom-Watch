@@ -438,6 +438,7 @@ def admin_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add User", callback_data="admin_adduser"),
          InlineKeyboardButton("✅ Verify Domain", callback_data="admin_verify")],
+        [InlineKeyboardButton("📊 Status", callback_data="admin_status")],
         [InlineKeyboardButton("❌ Remove User", callback_data="admin_removeuser"),
          InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ])
