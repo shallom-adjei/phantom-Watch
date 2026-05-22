@@ -1,4 +1,4 @@
-"""Multi‑code‑block report: each tool's output in its own gray copyable box."""
+"""Multi‑code‑block report with safe code blocks."""
 import re
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -63,18 +63,26 @@ def clean_ansi(text):
     """Remove terminal escape codes."""
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
+def safe_code_block(content, max_len=600):
+    """Return a Markdown code block with the content, after sanitising triple backticks."""
+    # Replace any ``` with ''' inside the content
+    safe_content = content.replace("```", "'''")
+    # Trim to max_len
+    if len(safe_content) > max_len:
+        safe_content = safe_content[:max_len]
+    return "```\n" + safe_content + "\n```"
+
 def format_summary(domain, results, detailed=False):
-    """Build the final report with separate code blocks for each tool."""
+    """Build the final report as a single Markdown string with separate code blocks."""
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
 
     lines = []
-    # Header
     lines.append(f"🔍 *Scan completed for {domain}*")
     lines.append(f"{risk_emoji} Threat Score: *{score}/100*  |  Risk Level: *{level}*")
     lines.append("━━━━━━━━━━━━━━━━━━")
 
-    # Compact summary (brief)
+    # Compact summary
     if 'nmap' in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap",""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap","")))
@@ -107,58 +115,35 @@ def format_summary(domain, results, detailed=False):
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
         lines.append("🦠 *Dalfox*: XSS vulnerabilities detected!")
 
-    # If paid, add detailed blocks for each tool
+    # Paid detailed report
     if detailed:
         lines.append("")
         lines.append("📋 *DETAILED PAID REPORT*")
-        # Nmap
-        if 'nmap' in results and results['nmap']:
+        # Add code blocks for each tool
+        if 'nmap' in results and results['nmap'] and "Error" not in results['nmap']:
             lines.append("🛡️ *Nmap*")
-            lines.append("```")
-            lines.append(clean_ansi(results['nmap'][:600]))
-            lines.append("```")
-        # Nikto
-        if 'nikto' in results and results['nikto']:
+            lines.append(safe_code_block(clean_ansi(results['nmap'])))
+        if 'nikto' in results and results['nikto'] and "Error" not in results['nikto']:
             lines.append("🔥 *Nikto*")
-            lines.append("```")
-            lines.append(clean_ansi(results['nikto'][:600]))
-            lines.append("```")
-        # WhatWeb
-        if 'whatweb' in results and results['whatweb']:
+            lines.append(safe_code_block(clean_ansi(results['nikto'])))
+        if 'whatweb' in results and results['whatweb'] and "Error" not in results['whatweb']:
             lines.append("🧩 *WhatWeb*")
-            lines.append("```")
-            lines.append(clean_ansi(results['whatweb'][:400]))
-            lines.append("```")
-        # theHarvester
-        if 'theHarvester' in results and results['theHarvester'] not in ("No email", "No results", ""):
+            lines.append(safe_code_block(clean_ansi(results['whatweb'])))
+        if 'theHarvester' in results and results['theHarvester'] not in ("No email", "No results", "", "Error"):
             lines.append("📧 *theHarvester*")
-            lines.append("```")
-            lines.append(clean_ansi(results['theHarvester'][:400]))
-            lines.append("```")
-        # dnstwist
-        if 'dnstwist' in results and results['dnstwist']:
+            lines.append(safe_code_block(clean_ansi(results['theHarvester'])))
+        if 'dnstwist' in results and results['dnstwist'] and "Error" not in results['dnstwist']:
             lines.append("🕵️ *dnstwist*")
-            lines.append("```")
-            lines.append(clean_ansi(results['dnstwist'][:400]))
-            lines.append("```")
-        # Metagoofil
+            lines.append(safe_code_block(clean_ansi(results['dnstwist'])))
         if 'metagoofil' in results and results['metagoofil'] and "No metadata" not in results['metagoofil']:
             lines.append("📄 *Metagoofil*")
-            lines.append("```")
-            lines.append(clean_ansi(results['metagoofil'][:400]))
-            lines.append("```")
-        # Sherlock
-        if 'sherlock' in results and results['sherlock']:
+            lines.append(safe_code_block(clean_ansi(results['metagoofil'])))
+        if 'sherlock' in results and results['sherlock'] and "Error" not in results['sherlock']:
             lines.append("👥 *Sherlock*")
-            lines.append("```")
-            lines.append(clean_ansi(results['sherlock'][:400]))
-            lines.append("```")
-        # Dalfox
+            lines.append(safe_code_block(clean_ansi(results['sherlock'])))
         if 'dalfox' in results and results['dalfox'] and "vulnerable" in results['dalfox'].lower():
             lines.append("🦠 *Dalfox*")
-            lines.append("```")
-            lines.append(clean_ansi(results['dalfox'][:400]))
-            lines.append("```")
+            lines.append(safe_code_block(clean_ansi(results['dalfox'])))
 
         # Compliance table
         lines.append("")
