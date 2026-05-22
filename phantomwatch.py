@@ -928,7 +928,7 @@ async def button_handler(update, context):
         try:
 
             await query.edit_message_text(
-            "🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo)
+            "🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo)"
 
         except Exception as e:
 
