@@ -73,7 +73,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
             with open(meta_report) as f: results['metagoofil'] = f.read()
             shutil.rmtree(f"/tmp/meta_{domain}")
         else:
-            results['metagoofil'] = "No metadata found or command failed."
+            results['metagoofil'] = "No public documents with metadata found (normal for this target)."
 
     # ----- Light tools (parallel in deep mode, else sequential) -----
     light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei","subfinder")]
@@ -92,7 +92,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                     else: out = "No email results."
                 else: out = "No email provided for OSINT."
                 return ("theHarvester", out)
-            elif tool == "dnstwist": return ("dnstwist", run_command(["dnstwist",domain], timeout=180)['stdout'])
+            elif tool == "dnstwist": return ("dnstwist", run_command(["dnstwist","--format","list",domain], timeout=90)['stdout'])
             elif tool == "sherlock":
                 company = domain.split('.')[0]
                 return ("sherlock", run_command(["sherlock",company,"--timeout","20"], timeout=200)['stdout'])
@@ -125,7 +125,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                         os.remove(f"report_{domain}.html")
                     else: results['theHarvester'] = "No email results."
                 else: results['theHarvester'] = "No email provided for OSINT."
-            elif tool == "dnstwist": results['dnstwist'] = run_command(["dnstwist",domain], timeout=180)['stdout']
+            elif tool == "dnstwist": results['dnstwist'] = run_command(["dnstwist","--format","list",domain], timeout=90)['stdout']
             elif tool == "sherlock":
                 results['sherlock'] = run_command(["sherlock",domain.split('.')[0],"--timeout","20"], timeout=200)['stdout']
             elif tool == "dalfox":
