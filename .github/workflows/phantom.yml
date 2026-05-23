@@ -73,11 +73,18 @@ jobs:
           tar xzf gitleaks_8.18.2_linux_x64.tar.gz
           sudo mv gitleaks /usr/local/bin/
 
-      - name: Install Amass (static binary)
+      - name: Install Amass (robust extraction)
         run: |
-          wget -q https://github.com/owasp-amass/amass/releases/download/v4.2.0/amass_Linux_amd64.tar.gz
-          tar xzf amass_Linux_amd64.tar.gz
-          sudo mv amass /usr/local/bin/
+          wget -q https://github.com/owasp-amass/amass/releases/download/v4.2.0/amass_linux_amd64.zip
+          unzip -q amass_linux_amd64.zip
+          # Find the amass binary, no matter which subfolder it's in
+          AMASS_BIN=$(find . -type f -name amass -executable -print -quit)
+          if [ -z "$AMASS_BIN" ]; then
+            echo "Amass binary not found. Listing contents for debugging:"
+            find . -type f | head -20
+            exit 1
+          fi
+          sudo mv "$AMASS_BIN" /usr/local/bin/amass
 
       - name: Install MassDNS
         run: |
