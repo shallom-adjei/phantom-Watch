@@ -118,7 +118,7 @@ def compute_threat_score(results):
 def clean_ansi(text):
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
-def build_report_markdown(domain, results, detailed=False):
+def build_report_markdown(domain, results, detailed=False, deep=False):
     """Return a single Markdown string with brief summary and optional detailed section."""
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
@@ -128,6 +128,10 @@ def build_report_markdown(domain, results, detailed=False):
     # Header
     lines.append(f"🔍 Scan completed for {domain}")
     lines.append(f"{risk_emoji} Threat Score: {score}/100  |  Risk Level: {level}")
+    if deep:
+        lines.append("🔬 Deep Scan Report")
+    else:
+        lines.append("ℹ️ Standard Scan – Upgrade to Enterprise for deep scanning.")
     lines.append("━━━━━━━━━━━━━━━━━━")
 
     # Brief summary (for all users)
