@@ -83,7 +83,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                     else: out = "No email results."
                 else: out = "No email provided for OSINT."
                 return ("theHarvester", out)
-            elif tool == "dnstwist": return ("dnstwist", run_command(["dnstwist",domain], timeout=120)['stdout'])
+            elif tool == "dnstwist": return ("dnstwist", run_command(["dnstwist",domain], timeout=180)['stdout'])
             elif tool == "sherlock":
                 company = domain.split('.')[0]
                 return ("sherlock", run_command(["sherlock",company,"--timeout","20"], timeout=200)['stdout'])
@@ -114,7 +114,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                         os.remove(f"report_{domain}.html")
                     else: results['theHarvester'] = "No email results."
                 else: results['theHarvester'] = "No email provided for OSINT."
-            elif tool == "dnstwist": results['dnstwist'] = run_command(["dnstwist",domain], timeout=120)['stdout']
+            elif tool == "dnstwist": results['dnstwist'] = run_command(["dnstwist",domain], timeout=180)['stdout']
             elif tool == "sherlock":
                 results['sherlock'] = run_command(["sherlock",domain.split('.')[0],"--timeout","20"], timeout=200)['stdout']
             elif tool == "dalfox":

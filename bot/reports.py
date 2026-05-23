@@ -104,15 +104,14 @@ def compute_threat_score(results):
 
     percent = min(100, int((score / max_score) * 100))
 
-    if percent < 10:
+    if percent < 20:
         level = "LOW"
-    elif percent < 30:
+    elif percent < 50:
         level = "MEDIUM"
-    elif percent < 60:
+    elif percent < 80:
         level = "HIGH"
     else:
         level = "CRITICAL"
-
     return percent, level
 
 def clean_ansi(text):
@@ -126,12 +125,14 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
     lines = []
 
     # Header
-    lines.append(f"🔍 Scan completed for {domain}")
+    lines.append(f"🔍 Scan completed for {domain}"
+    lines.append("")
     lines.append(f"{risk_emoji} Threat Score: {score}/100  |  Risk Level: {level}")
     if deep:
         lines.append("🔬 Deep Scan Report")
     else:
         lines.append("ℹ️ Standard Scan – Upgrade to Enterprise for deep scanning.")
+    lines.append("")
     lines.append("━━━━━━━━━━━━━━━━━━")
 
     # Brief summary (for all users)
