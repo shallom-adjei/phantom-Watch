@@ -1,8 +1,8 @@
-name: Phantom Watch Bot
+name: Phantom Watch Bot (24/7)
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 concurrency:
@@ -12,33 +12,53 @@ concurrency:
 jobs:
   bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
+
+      # Restore database from cache
+      - name: Restore database cache
+        uses: actions/cache@v4
+        with:
+          path: phantom_clients.db
+          key: phantom-db-${{ github.run_id }}
+          restore-keys: |
+            phantom-db-
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y nmap nikto whatweb git python3-pip curl
+          sudo apt-get install -y nmap nikto whatweb git python3-pip curl fonts-dejavu-core
+
+      - name: Install Python tools (pip) system-wide
+        run: |
+          sudo pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog
+
+      - name: Install Playwright browsers
+        run: |
+          sudo python3 -m playwright install-deps
+          python3 -m playwright install chromium
+
+      - name: Clone metagoofil
+        run: git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
+
+      - name: Clone sherlock and install
+        run: |
+          git clone https://github.com/sherlock-project/sherlock.git /home/runner/sherlock
+          cd /home/runner/sherlock && pip3 install --break-system-packages .
+
       - name: Install Nuclei
         run: |
           wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.3.7/nuclei_3.3.7_linux_amd64.zip
           unzip -q nuclei_3.3.7_linux_amd64.zip
           sudo mv nuclei /usr/local/bin/
-          nuclei -version
-      - name: Install Subfinder and MassDNS
+
+      - name: Install Subfinder
         run: |
           wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
           unzip -q subfinder_2.6.6_linux_amd64.zip
           sudo mv subfinder /usr/local/bin/
-      - name: Install Python tools
-        run: |
-          sudo pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog
-      - name: Clone metagoofil
-        run: git clone https://github.com/laramies/metagoofil.git /home/runner/metagoofil
-      - name: Clone sherlock and install
-        run: |
-          git clone https://github.com/sherlock-project/sherlock.git /home/runner/sherlock
-          cd /home/runner/sherlock && pip3 install --break-system-packages .
+
       - name: Run Phantom Watch
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
