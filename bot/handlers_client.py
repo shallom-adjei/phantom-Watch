@@ -114,6 +114,8 @@ async def quick_scan_subhandler(update, context):
         tools = ["theHarvester", "sherlock"]
     elif data == "quick_subfinder":
         tools = ["subfinder"]
+    elif data == "quick_ffuf":
+        tools = ["ffuf"]
     elif data == "quick_recon":
         tools = ["whatweb", "dnstwist", "metagoofil"]
     elif data == "quick_xss":
