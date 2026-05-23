@@ -39,7 +39,7 @@ def run_amass(domain, progress_callback=None):
     """Enumerate subdomains using Amass (active + passive)."""
     if progress_callback:
         progress_callback("🔍 Amass enumerating subdomains...")
-    cmd = ["amass", "enum", "-d", domain, "-silent", "-timeout", "120"]
+    cmd = ["/usr/local/bin/amass", "enum", "-passive", "-d", domain, "-silent", "-timeout", "120"]
     res = run_command(cmd, timeout=180)
     if res['stdout'].strip():
         return res['stdout'].strip().split('\n')
