@@ -42,6 +42,8 @@ async def check_breach(email: str, context, chat_id: int):
 
 # ---------- callback handlers ----------
 async def start_command(update, context):
+    from bot.onboarding import onboard_new_user
+    await onboard_new_user(update, context)
     from bot.menus import menu_button
     await update.message.reply_text(
         "Tap the *🛡️ Menu* button below anytime to bring up options.",

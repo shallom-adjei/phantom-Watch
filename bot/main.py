@@ -12,6 +12,7 @@ from bot.handlers_admin import (
 )
 from bot.config import BOT_TOKEN, ADMIN_USERNAME
 from bot.menus import main_menu
+import asyncio
 import traceback
 
 CALLBACK_ROUTES = {
@@ -45,8 +46,6 @@ async def button_router(update, context):
         except Exception as e:
             print(f"[ERROR] Callback {data} crashed: {e}")
             traceback.print_exc()
-    else:
-        print(f"[WARN] No handler for callback: {data}")
 
 async def message_router(update, context):
     username = update.message.from_user.username
@@ -99,11 +98,27 @@ async def message_router(update, context):
     except Exception as e:
         print(f"Fallback error: {e}")
 
+async def background_tasks(app):
+    """Start subscription checks and CVE monitor."""
+    while True:
+        try:
+            from bot.scheduler import check_subscriptions, cve_monitor
+            await check_subscriptions(app.bot)
+            await cve_monitor(app.bot, ADMIN_USERNAME)
+        except Exception as e:
+            print(f"Background task error: {e}")
+        await asyncio.sleep(3600)  # run every hour
+
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CallbackQueryHandler(button_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_router))
+
+    # Start background tasks
+    loop = asyncio.get_event_loop()
+    loop.create_task(background_tasks(app))
+
     print("👻 Phantom Watch is watching...")
     app.run_polling()
 
