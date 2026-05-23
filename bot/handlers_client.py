@@ -106,6 +106,8 @@ async def quick_scan_subhandler(update, context):
     if not is_active(username):
         await safe_edit(query, "⛔ Not authorized or trial expired.")
         return
+    if data == "quick_nuclei":
+        tools = ["nuclei"]
     if data == "quick_ports":
         tools = ["nmap", "nikto"]
     elif data == "quick_osint":
@@ -441,7 +443,7 @@ async def handle_scan_domain(update, context):
         print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
         try:
             from bot.reports import build_report_markdown
-            report_md = build_report_markdown(domain, results, detailed)
+            report_md = build_report_markdown(domain, results, detailed, deep)
             await context.bot.send_message(chat_id=chat_id, text=report_md, parse_mode="Markdown")
             print(f"[DEBUG] Single message report sent")
         except Exception as e:

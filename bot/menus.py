@@ -36,4 +36,5 @@ def quick_scan_menu():
         [InlineKeyboardButton("🔎 Recon", callback_data="quick_recon"),
          InlineKeyboardButton("🦠 XSS Check", callback_data="quick_xss")],
         [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
+        [InlineKeyboardButton("🧬 Nuclei Scan", callback_data="quick_nuclei")],
     ])

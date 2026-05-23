@@ -19,6 +19,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y nmap nikto whatweb git python3-pip curl
+      - name: Install Nuclei
+        run: |
+          wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.3.7/nuclei_3.3.7_linux_amd64.zip
+          unzip -q nuclei_3.3.7_linux_amd64.zip
+          sudo mv nuclei /usr/local/bin/
+          nuclei -version
       - name: Install Python tools
         run: |
           sudo pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog
