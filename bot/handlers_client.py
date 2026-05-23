@@ -463,7 +463,8 @@ async def handle_scan_domain(update, context):
 
     # Determine if this is a deep scan (enterprise users)
     c.execute("SELECT plan FROM clients WHERE username=?", (username,))
-    row = c.fetchone()
+        context.user_data["plan"] = plan   # remember plan for later
+        context.user_data["plan"] = plan   # remember plan for later
     plan = row[0] if row else "free"
     deep = (plan == "enterprise")
 
@@ -479,11 +480,9 @@ async def handle_scan_domain(update, context):
         pass
 
     if results:
-        # Determine plan
-        c.execute("SELECT plan FROM clients WHERE username=?", (username,))
-        row = c.fetchone()
-        plan = row[0] if row else "free"
-        detailed = plan in ("monthly", "enterprise")
+            # Use the plan we saved before the scan (more reliable)
+            plan = context.user_data.get("plan", "free")
+            detailed = plan in ("monthly", "enterprise")
 
         print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
         try:
