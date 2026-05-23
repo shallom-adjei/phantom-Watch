@@ -26,7 +26,7 @@ def run_nuclei(domain, progress_callback=None):
 
 def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
     if tools is None:
-        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei"]
+        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei", "subfinder"]
 
     results = {}
 

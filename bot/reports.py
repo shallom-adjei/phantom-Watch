@@ -167,13 +167,18 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
         lines.append(f"👥 Sherlock: {found} social accounts found")
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
         lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
+    if 'subfinder' in results and results['subfinder']:
+        subs = results['subfinder'].strip().split('\n')
+        if subs and subs[0]:
+            lines.append(f"🌐 Subfinder: {len(subs)} subdomains discovered")
+        else:
+            lines.append("🌐 Subfinder: No subdomains found.")
+    else:
+        lines.append("🌐 Subfinder: Not run.")
     if 'nuclei' in results and results['nuclei']:
         lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
     else:
         lines.append("🧬 Nuclei: No known vulnerabilities found.")
-    if 'subfinder' in results and results['subfinder']:
-        subs = results['subfinder'].strip().split('\n')
-        lines.append(f"🌐 Subfinder: {len(subs)} subdomains discovered")
 
     # For paid users, add a separated detailed section
     if detailed:
