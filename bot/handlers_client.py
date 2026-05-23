@@ -419,7 +419,6 @@ async def handle_scan_domain(update, context):
     row = c.fetchone()
     email = row[0] if row else ""
     tools = context.user_data.get("tools", None)
-    if tools is None: tools = []; tools.append("ffuf")
 
     # Determine if this is a deep scan (enterprise users)
     c.execute("SELECT plan FROM clients WHERE username=?", (username,))
