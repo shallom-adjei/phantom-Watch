@@ -1,5 +1,6 @@
 """Onboarding flow for new users."""
-from bot.database import is_client, add_client, is_active, ADMIN_USERNAME
+from bot.database import is_client, add_client, is_active
+from bot.config import ADMIN_USERNAME
 from bot.menus import main_menu
 
 async def onboard_new_user(update, context):
