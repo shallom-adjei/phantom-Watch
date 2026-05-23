@@ -18,11 +18,11 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Restore database cache
+      - name: Restore database from cache
         uses: actions/cache@v4
         with:
           path: phantom_clients.db
-          key: phantom-db-${{ github.run_id }}
+          key: phantom-db-${{ hashFiles('phantom_clients.db') }}
           restore-keys: |
             phantom-db-
 
@@ -99,3 +99,10 @@ jobs:
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           HIBP_API_KEY: ${{ secrets.HIBP_API_KEY }}
         run: python3 -m bot.main
+
+      - name: Save database to cache
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: phantom_clients.db
+          key: phantom-db-${{ hashFiles('phantom_clients.db') }}
