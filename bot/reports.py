@@ -15,95 +15,40 @@ COMPLIANCE = {
 }
 
 def compute_threat_score(results):
-    """Advanced threat scoring using CVSS data from nmap."""
-    # Extract CVSS scores from nmap output
-    cvss_scores = []
+    score = 0
+    max_score = 0
     if 'nmap' in results:
-        nmap_out = results['nmap']
-        # Look for CVSS scores in lines like "CVSS: 7.5" or "cvss: 9.8"
-        for match in re.finditer(r'cvss[:\s]+(\d+\.?\d*)', nmap_out, re.IGNORECASE):
-            score_val = float(match.group(1))
-            if 0 <= score_val <= 10:
-                cvss_scores.append(score_val)
-
-    # Count other findings
-    open_ports = 0
-    nikto_issues = 0
-    leaked_emails = 0
-    typosquatting = 0
-    metadata_leaks = 0
-    social_accounts = 0
-    xss_found = False
-
-    if 'nmap' in results:
-        open_ports = len(re.findall(r"^\d+/tcp\s+open\s+", results['nmap'], re.MULTILINE))
+        open_ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get('nmap',''), re.MULTILINE))
+        vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get('nmap','')))
+        score += (open_ports * 5) + (vulns * 15)
+        max_score += (10 * 5) + (10 * 15)
     if 'nikto' in results:
-        nikto_issues = len(re.findall(r"\+ (.*)", results.get('nikto','')))
+        issues = len(re.findall(r"\+ (.*)", results.get('nikto','')))
+        score += issues * 10
+        max_score += 10 * 10
     if 'theHarvester' in results and results['theHarvester'] != "No email":
         harvest = results['theHarvester']
         if "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-            leaked_emails = len(emails)
+            score += len(emails) * 10
+            max_score += 20 * 10
     if 'dnstwist' in results:
-        typosquatting = len(re.findall(r"^([^ ]+)\s+registered.*", results.get('dnstwist',''), re.MULTILINE))
+        registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get('dnstwist',''), re.MULTILINE))
+        score += registered * 10
+        max_score += 10 * 10
     if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
-        metadata_leaks = 1
+        score += 25
+        max_score += 25
     if 'sherlock' in results:
-        social_accounts = len(re.findall(r"\[\+\] (.*)", results.get('sherlock','')))
+        found = len(re.findall(r"\[\+\] (.*)", results.get('sherlock','')))
+        score += found * 5
+        max_score += 20 * 5
     if 'dalfox' in results and "vulnerable" in results.get('dalfox','').lower():
-        xss_found = True
-
-    # Weighted scoring
-    score = 0.0
-    max_score = 0.0
-
-    # CVSS‑based severity (high weight)
-    for cvss in cvss_scores:
-        if cvss >= 9.0:
-            weight = 25
-        elif cvss >= 7.0:
-            weight = 15
-        elif cvss >= 4.0:
-            weight = 8
-        else:
-            weight = 3
-        score += weight
-        max_score += 25  # assume critical as max
-
-    # Open ports (moderate weight per port, but limited)
-    score += min(open_ports, 10) * 2
-    max_score += 10 * 2
-
-    # Nikto issues
-    score += min(nikto_issues, 10) * 3
-    max_score += 10 * 3
-
-    # Leaked emails
-    score += min(leaked_emails, 5) * 5
-    max_score += 5 * 5
-
-    # Typosquatting domains
-    score += min(typosquatting, 5) * 4
-    max_score += 5 * 4
-
-    # Metadata leaks
-    score += metadata_leaks * 10
-    max_score += 10
-
-    # Social accounts
-    score += min(social_accounts, 10) * 1
-    max_score += 10 * 1
-
-    # XSS
-    if xss_found:
-        score += 30
-        max_score += 30
-
+        score += 50
+        max_score += 50
     if max_score == 0:
         return 0, "LOW"
-
     percent = min(100, int((score / max_score) * 100))
-
     if percent < 20:
         level = "LOW"
     elif percent < 50:
@@ -118,13 +63,10 @@ def clean_ansi(text):
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
 def build_report_markdown(domain, results, detailed=False, deep=False):
-    """Return a single Markdown string with brief summary and optional detailed section."""
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
 
     lines = []
-
-    # Header
     lines.append(f"🔍 Scan completed for {domain}")
     lines.append("")
     lines.append(f"{risk_emoji} Threat Score: {score}/100  |  Risk Level: {level}")
@@ -135,7 +77,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
     lines.append("")
     lines.append("━━━━━━━━━━━━━━━━━━")
 
-    # Brief summary (for all users)
+    # Brief summary
     if 'nmap' in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap",""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap","")))
@@ -167,22 +109,21 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
         lines.append(f"👥 Sherlock: {found} social accounts found")
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
         lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
-    if 'subfinder' in results and results['subfinder']:
-        subs = results['subfinder'].strip().split('\n')
-        if subs and subs[0]:
+    if 'nuclei' in results:
+        if results['nuclei'] and "No known" not in results['nuclei']:
+            lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
+        else:
+            lines.append("🧬 Nuclei: No known vulnerabilities found.")
+    if 'subfinder' in results:
+        subs = results['subfinder'].strip().split('\n') if results['subfinder'].strip() else []
+        if subs:
             lines.append(f"🌐 Subfinder: {len(subs)} subdomains discovered")
         else:
             lines.append("🌐 Subfinder: No subdomains found.")
-    else:
-        lines.append("🌐 Subfinder: Not run.")
-    if 'nuclei' in results and results['nuclei']:
-        lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
-    else:
-        lines.append("🧬 Nuclei: No known vulnerabilities found.")
 
-    # For paid users, add a separated detailed section
+    # Detailed paid report
     if detailed:
-        lines.append("")  # one blank line
+        lines.append("")
         lines.append("━━━━━━━━━━━━━━━━━━")
         lines.append("📋 DETAILED PAID REPORT")
         lines.append("━━━━━━━━━━━━━━━━━━")
@@ -211,7 +152,9 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
                 lines.append(snippet)
                 lines.append("```")
 
-        # Compliance table in its own code block
+        # Compliance table
+        lines.append("")
+        lines.append("📜 Compliance")
         compliance_lines = ["COMPLIANCE STATUS"]
         for category, rules in COMPLIANCE.items():
             status = "✅"
@@ -230,8 +173,6 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
             elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")):
                 status = "❌"
             compliance_lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
-        lines.append("")
-        lines.append("📜 Compliance")
         lines.append("```")
         lines.extend(compliance_lines)
         lines.append("```")

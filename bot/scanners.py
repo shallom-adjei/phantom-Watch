@@ -1,4 +1,4 @@
-"""Scan engine – standard (fast) and deep (full power) modes, with Nuclei."""
+"""Scan engine – standard (fast) and deep (full power) modes, with Nuclei & Subfinder."""
 import subprocess, os, shutil, concurrent.futures
 
 def run_command(cmd, timeout=150):
@@ -10,13 +10,6 @@ def run_command(cmd, timeout=150):
     except Exception as e:
         return {"stdout": f"[!] Error: {e}", "returncode": -1, "failed": True}
 
-def run_subfinder(domain, progress_callback=None):
-    if progress_callback:
-        progress_callback("🔍 Subfinder enumerating subdomains...")
-    cmd = ["subfinder", "-d", domain, "-silent"]
-    res = run_command(cmd, timeout=120)
-    return res['stdout'].strip().split('\n') if res['stdout'].strip() else []
-
 def run_nuclei(domain, progress_callback=None):
     if progress_callback:
         progress_callback("🧬 Nuclei scanning for vulnerabilities...")
@@ -24,9 +17,18 @@ def run_nuclei(domain, progress_callback=None):
     res = run_command(cmd, timeout=300)
     return res['stdout']
 
+def run_subfinder(domain, progress_callback=None):
+    if progress_callback:
+        progress_callback("🔍 Subfinder enumerating subdomains...")
+    cmd = ["subfinder", "-d", domain, "-silent"]
+    res = run_command(cmd, timeout=120)
+    if res['stdout'].strip():
+        return res['stdout'].strip().split('\n')
+    return []
+
 def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
     if tools is None:
-        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei", "subfinder"]
+        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder"]
 
     results = {}
 
@@ -74,7 +76,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
             results['metagoofil'] = "No metadata found or command failed."
 
     # ----- Light tools (parallel in deep mode, else sequential) -----
-    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei")]
+    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei","subfinder")]
 
     if deep and light_tools:
         progress_callback(f"⚡ Running {len(light_tools)} light tools in parallel...")
