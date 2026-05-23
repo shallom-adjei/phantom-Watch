@@ -65,6 +65,19 @@ jobs:
           tar xzf ffuf_2.1.0_linux_amd64.tar.gz
           sudo mv ffuf /usr/local/bin/
 
+      - name: Install Gitleaks
+        run: |
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_amd64.tar.gz
+          tar xzf gitleaks_8.18.4_linux_amd64.tar.gz
+          sudo mv gitleaks /usr/local/bin/
+
+      - name: Install Amass and MassDNS
+        run: |
+          wget -q https://github.com/owasp-amass/amass/releases/download/v4.2.0/amass_linux_amd64.zip
+          unzip -q amass_linux_amd64.zip
+          sudo mv amass_linux_amd64/amass /usr/local/bin/
+          sudo apt-get install -y massdns
+
       - name: Run Phantom Watch
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}

@@ -35,6 +35,62 @@ def run_subfinder(domain, progress_callback=None):
         return res['stdout'].strip().split('\n')
     return []
 
+def run_amass(domain, progress_callback=None):
+    """Enumerate subdomains using Amass (active + passive)."""
+    if progress_callback:
+        progress_callback("🔍 Amass enumerating subdomains...")
+    cmd = ["amass", "enum", "-d", domain, "-silent", "-timeout", "120"]
+    res = run_command(cmd, timeout=180)
+    if res['stdout'].strip():
+        return res['stdout'].strip().split('\n')
+    return []
+
+def run_massdns(subs, progress_callback=None):
+    """Verify live subdomains with MassDNS."""
+    if not subs:
+        return []
+    if progress_callback:
+        progress_callback("🔍 MassDNS verifying live subdomains...")
+    # Write subs to file
+    with open("/tmp/subs.txt", "w") as f:
+        f.write("\n".join(subs))
+    # Run MassDNS with a public resolver
+    cmd = ["massdns", "-r", "/home/runner/resolvers.txt", "-t", "A", "-o", "S", "/tmp/subs.txt"]
+    # We need a resolvers file; download a trusted list
+    subprocess.run(["wget", "-q", "https://raw.githubusercontent.com/blechschmidt/massdns/master/lists/resolvers.txt", "-O", "/home/runner/resolvers.txt"], check=True)
+    res = run_command(cmd, timeout=60)
+    # Parse output: only lines with an A record
+    live = set()
+    for line in res['stdout'].split('\n'):
+        if line and " A " in line:
+            sub = line.split(" A ")[0].rstrip('.')
+            live.add(sub)
+    return list(live)
+
+def run_amass_massdns(domain, progress_callback=None):
+    subs = run_amass(domain, progress_callback)
+    if not subs:
+        return []
+    live = run_massdns(subs, progress_callback)
+    return live
+
+def run_gitleaks(repo_url, progress_callback=None):
+    """Clone a GitHub repo and scan for secrets using Gitleaks."""
+    if progress_callback:
+        progress_callback("🔑 Gitleaks scanning for secrets...")
+    repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
+    clone_dir = f"/tmp/{repo_name}_{random.randint(1000,9999)}"
+    subprocess.run(["git", "clone", "--depth=1", repo_url, clone_dir], check=True, timeout=30)
+    cmd = ["gitleaks", "detect", "--source", clone_dir, "--no-git", "--report-format", "json", "--exit-code", "0"]
+    res = run_command(cmd, timeout=120)
+    shutil.rmtree(clone_dir, ignore_errors=True)
+    # Parse JSON output
+    try:
+        findings = json.loads(res['stdout'])
+        return findings
+    except:
+        return []
+
 def run_ffuf(domain, progress_callback=None):
     """Fuzz for hidden directories using a built‑in wordlist."""
     if progress_callback:
@@ -64,7 +120,7 @@ def run_ffuf(domain, progress_callback=None):
 
 def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
     if tools is None:
-        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf"]
+        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","amass"]
 
     results = {}
 
@@ -140,6 +196,8 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 return ("subfinder", "\n".join(run_subfinder(domain)))
             elif tool == "ffuf":
                 return ("ffuf", run_ffuf(domain))
+            elif tool == "amass":
+                results['amass'] = "\n".join(run_amass_massdns(domain))
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(run_light, t): t for t in light_tools}

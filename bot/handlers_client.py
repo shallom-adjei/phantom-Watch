@@ -120,6 +120,12 @@ async def quick_scan_subhandler(update, context):
         tools = ["whatweb", "dnstwist", "metagoofil"]
     elif data == "quick_xss":
         tools = ["dalfox"]
+    elif data == "quick_amass":
+        tools = ["amass"]
+    elif data == "quick_gitleaks":
+        # Gitleaks requires a GitHub URL, so we'll set a special state
+        context.user_data["state"] = "GITHUB_SCAN"
+        await query.edit_message_text("🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):")
     context.user_data["state"] = "SCAN_DOMAIN"
     context.user_data["tools"] = tools
     context.user_data["scan_type"] = "quick"
@@ -353,19 +359,27 @@ async def handle_client_message(update, context):
             repo_name = repo_url.rstrip("/").split("/")[-1]
             clone_dir = f"/tmp/{repo_name}_{random.randint(1000,9999)}"
             subprocess.run(["git", "clone", "--depth=1", repo_url, clone_dir], check=True, timeout=30)
-            result = subprocess.run(["trufflehog", "filesystem", clone_dir, "--no-update", "--json"],
-                                    capture_output=True, text=True, timeout=120)
+            # Run Gitleaks
+            result = subprocess.run(
+                ["gitleaks", "detect", "--source", clone_dir, "--no-git", "--report-format", "json", "--exit-code", "0"],
+                capture_output=True, text=True, timeout=120
+            )
             shutil.rmtree(clone_dir, ignore_errors=True)
-            findings = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
-            if not findings:
-                await update.message.reply_text("✅ No secrets detected.")
+            if result.stdout.strip():
+                findings = json.loads(result.stdout)
+                if findings:
+                    summary = f"🔑 *Gitleaks Found {len(findings)} secrets!*\n"
+                    for f in findings[:5]:
+                        file_path = f.get("File", "unknown")
+                        rule = f.get("Description", "Unknown")
+                        summary += f"• {rule} in `{file_path}`\n"
+                    await update.message.reply_text(summary, parse_mode="Markdown")
+                else:
+                    await update.message.reply_text("✅ No secrets detected.")
             else:
-                summary = f"🔑 *Found {len(findings)} secrets!*\n"
-                for f in findings[:5]:
-                    summary += f"• {f.get('DetectorName','Unknown')} in {f.get('SourceMetadata',{}).get('Data',{}).get('Filesystem',{}).get('file','unknown')}\n"
-                await update.message.reply_text(summary, parse_mode="Markdown")
+                await update.message.reply_text("✅ No secrets detected.")
         except Exception as e:
-            await update.message.reply_text(f"❌ GitHub scan failed: {e}")
+            await update.message.reply_text(f"❌ Gitleaks scan failed: {e}")
         context.user_data.pop("state", None)
         return True
 

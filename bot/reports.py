@@ -106,6 +106,12 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
             lines.append(f"🌀 FFUF: {len(paths)} hidden paths discovered")
         else:
             lines.append("🌀 FFUF: No hidden paths found.")
+    if 'amass' in results:
+        subs = results['amass'].strip().split('\n') if results['amass'].strip() else []
+        if subs:
+            lines.append(f"🌐 Amass: {len(subs)} live subdomains discovered")
+        else:
+            lines.append("🌐 Amass: No live subdomains found.")
     # Detailed paid report
     if detailed:
         lines.append("")
@@ -124,6 +130,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
             ("🦠 Dalfox", 'dalfox'),
             ("🌐 Subfinder", 'subfinder'),
             ("🌀 FFUF Hidden Paths", 'ffuf'),
+            ("🌐 Amass Live Subdomains", 'amass'),
         ]
         for label, key in tools:
             if key in results and results[key] and "Error" not in str(results[key]):
