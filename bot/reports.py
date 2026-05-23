@@ -49,7 +49,7 @@ def compute_threat_score(results):
 def clean_ansi(text):
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
-def build_report_markdown(domain, results, detailed=False, deep=False):
+def build_report_markdown(domain, results, detailed=False, deep=False, show_compliance=True):
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
 
@@ -89,8 +89,11 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
     if 'sherlock' in results:
         found = len(re.findall(r"\[\+\] (.*)", results.get("sherlock","")))
         lines.append(f"👥 Sherlock: {found} social accounts found")
-    if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
-        lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
+    if 'dalfox' in results:
+        if "vulnerable" in results.get('dalfox', '').lower():
+            lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
+        else:
+            lines.append("🦠 Dalfox: No XSS found.")
     if 'nuclei' in results:
         if results['nuclei'] and "Error" not in str(results['nuclei']) and results['nuclei'].strip():
             lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
@@ -131,14 +134,17 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
             ("🌐 Amass Live Subdomains", 'amass'),
         ]
         for label, key in tools:
-            if key in results and results[key] and "Error" not in str(results[key]):
-                raw = clean_ansi(results[key])
-                if key == "theHarvester" and raw in ("No email", "No results"): continue
-                safe = raw.replace("```", "'''")
-                snippet = safe[:300]
+            if key in results and "Error" not in str(results.get(key, "")):
+                raw = clean_ansi(results[key]) if results[key] else ""
+                if key == "theHarvester" and raw in ("No email", "No results"):
+                    continue
+                safe = raw.replace("```", "'''")[:300]
                 lines.append(label)
                 lines.append("```")
-                lines.append(snippet)
+                if safe.strip():
+                    lines.append(safe)
+                else:
+                    lines.append("No findings.")
                 lines.append("```")
 
         # Nuclei explicit block (always shown)
@@ -153,7 +159,9 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
             lines.append(nuclei_text)
             lines.append("```")
 
-        # Compliance table
+
+        if show_compliance:
+            # Compliance table
         lines.append("")
         lines.append("📜 Compliance")
         compliance_lines = ["COMPLIANCE STATUS"]

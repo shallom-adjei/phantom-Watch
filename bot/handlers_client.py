@@ -488,7 +488,8 @@ async def handle_scan_domain(update, context):
         print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
         try:
             from bot.reports import build_report_markdown
-            report_md = build_report_markdown(domain, results, detailed, deep)
+            show_compliance = (context.user_data.get("scan_type") == "full")
+            report_md = build_report_markdown(domain, results, detailed, deep, show_compliance)
             # Split long reports into chunks of 3500 characters
             chunk_size = 3500
             for i in range(0, len(report_md), chunk_size):
