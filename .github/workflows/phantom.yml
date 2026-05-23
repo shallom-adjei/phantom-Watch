@@ -71,13 +71,12 @@ jobs:
           tar xzf gitleaks_8.18.2_linux_x64.tar.gz
           sudo mv gitleaks /usr/local/bin/
 
-      - name: Install Amass (robust)
+      - name: Install Amass (guaranteed)
         run: |
           wget -q https://github.com/owasp-amass/amass/releases/download/v4.2.0/amass_linux_amd64.zip
           unzip -q amass_linux_amd64.zip
-          AMASS_BIN=$(find . -type f -name amass -executable -print -quit)
-          if [ -z "$AMASS_BIN" ]; then echo "Amass binary not found"; exit 1; fi
-          sudo mv "$AMASS_BIN" /usr/local/bin/amass
+          sudo mv amass_linux_amd64/amass /usr/local/bin/
+          sudo chmod +x /usr/local/bin/amass
 
       - name: Install MassDNS
         run: |
