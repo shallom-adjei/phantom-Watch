@@ -55,7 +55,7 @@ def run_massdns(subs, progress_callback=None):
     with open("/tmp/subs.txt", "w") as f:
         f.write("\n".join(subs))
     # Run MassDNS with a public resolver
-    cmd = ["massdns", "-r", "/home/runner/resolvers.txt", "-t", "A", "-o", "S", "/tmp/subs.txt"]
+    cmd = ["massdns", "-r", "/tmp/resolvers.txt", "-t", "A", "-o", "S", "/tmp/subs.txt"]
     # We need a resolvers file; download a trusted list
     # Use the resolvers file already downloaded in the workflow
     resolvers_path = "/tmp/resolvers.txt"
