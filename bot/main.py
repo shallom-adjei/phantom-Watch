@@ -112,6 +112,23 @@ async def background_tasks(app):
             print(f"Background task error: {e}")
         await asyncio.sleep(3600)  # run every hour
 
+import subprocess, time
+
+async def auto_save_db():
+    """Commit and push phantom_clients.db to the 'db' branch every 5 minutes."""
+    while True:
+        await asyncio.sleep(300)  # 5 minutes
+        try:
+            # Only push if the file has changed
+            subprocess.run(["git", "add", "phantom_clients.db"], check=False)
+            result = subprocess.run(["git", "diff", "--staged", "--quiet"], check=False)
+            if result.returncode != 0:  # there are changes
+                subprocess.run(["git", "commit", "-m", "auto-save database"], check=False)
+                subprocess.run(["git", "push", "origin", "db"], check=False)
+                print("[DB] Auto‑saved database to db branch.")
+        except Exception as e:
+            print(f"[DB] Auto‑save failed: {e}")
+
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
@@ -121,6 +138,8 @@ def main():
     # Start background tasks
     loop = asyncio.get_event_loop()
     loop.create_task(background_tasks(app))
+    loop = asyncio.get_event_loop()
+    loop.create_task(auto_save_db())
 
     print("👻 Phantom Watch is watching...")
     app.run_polling()
