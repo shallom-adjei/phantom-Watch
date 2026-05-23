@@ -479,27 +479,23 @@ async def handle_scan_domain(update, context):
     except:
         pass
     if results:
-            # Use the plan we saved before the scan (more reliable)
-            plan = context.user_data.get("plan", "free")
-            detailed = plan in ("monthly", "enterprise")
+        # Use the plan we saved before the scan (more reliable)
+        plan = context.user_data.get("plan", "free")
+        detailed = plan in ("monthly", "enterprise")
 
-            print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
-            try:
+        print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
+        try:
             from bot.reports import build_report_markdown
             show_compliance = (context.user_data.get("scan_type") == "full")
             report_md = build_report_markdown(domain, results, detailed, deep, show_compliance)
-            # Split long reports into chunks of 3500 characters
+            # Split long reports into chunks
             chunk_size = 3500
             for i in range(0, len(report_md), chunk_size):
                 chunk = report_md[i:i+chunk_size]
                 try:
                     await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="Markdown")
-                except Exception as send_err:
-                    # If Markdown fails, send as plain text
-                    try:
-                        await context.bot.send_message(chat_id=chat_id, text=chunk)
-                    except:
-                        pass
+                except:
+                    await context.bot.send_message(chat_id=chat_id, text=chunk)
             print(f"[DEBUG] Report sent in {(len(report_md) // chunk_size) + 1} chunks")
         except Exception as e:
             import traceback
@@ -508,6 +504,10 @@ async def handle_scan_domain(update, context):
                 await context.bot.send_message(chat_id=chat_id, text="⚠️ Report generation failed. Please contact admin.")
             except:
                 pass
+
+        if plan == "free":
+            c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
+            conn.commit()
 
         # Exploitation proof for enterprise
         if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
