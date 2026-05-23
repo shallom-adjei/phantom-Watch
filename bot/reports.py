@@ -99,8 +99,12 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
     if 'subfinder' in results:
         subs = results['subfinder'].strip().split('\n') if results['subfinder'].strip() else []
-        if subs: lines.append(f"🌐 Subfinder: {len(subs)} subdomains discovered")
-        else: lines.append("🌐 Subfinder: No subdomains found.")
+        # Filter out info lines and the original domain
+        real_subs = [s for s in subs if s and not s.startswith('[') and s != domain]
+        if real_subs:
+            lines.append(f"🌐 Subfinder: {len(real_subs)} subdomains discovered")
+        else:
+            lines.append("🌐 Subfinder: No subdomains found.")
     if 'ffuf' in results:
         paths = results['ffuf'].strip().split('\n') if results['ffuf'].strip() else []
         if paths:
@@ -138,6 +142,14 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                 raw = clean_ansi(results[key]) if results[key] else ""
                 if key == "theHarvester" and raw in ("No email", "No results"):
                     continue
+                if key == "subfinder":
+                    # Show the first 15 lines of subdomains
+                    lines_raw = raw.strip().split('\n')
+                    real_subs = [l for l in lines_raw if l and not l.startswith('[') and l != domain]
+                    snippet = "\n".join(real_subs[:15]) if real_subs else "No live subdomains found."
+                else:
+                    safe = raw.replace("```", "'''")
+                    snippet = safe[:300]
                 safe = raw.replace("```", "'''")[:300]
                 lines.append(label)
                 lines.append("```")
