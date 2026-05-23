@@ -13,7 +13,7 @@ def run_command(cmd, timeout=150):
 def run_nuclei(domain, progress_callback=None):
     if progress_callback:
         progress_callback("🧬 Nuclei scanning for vulnerabilities...")
-    cmd = ["nuclei", "-u", f"http://{domain}", "-severity", "critical,high,medium", "-silent", "-json"]
+    cmd = ["nuclei", "-u", f"http://{domain}", "-severity", "critical,high,medium", "-silent", "-jsonl"]
     res = run_command(cmd, timeout=300)
     return res['stdout']
 
