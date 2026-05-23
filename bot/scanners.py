@@ -1,4 +1,4 @@
-"""Scan engine – standard (fast) and deep (full power) modes."""
+"""Scan engine – standard (fast) and deep (full power) modes, with Nuclei."""
 import subprocess, os, shutil, concurrent.futures
 
 def run_command(cmd, timeout=150):
@@ -10,14 +10,20 @@ def run_command(cmd, timeout=150):
     except Exception as e:
         return {"stdout": f"[!] Error: {e}", "returncode": -1, "failed": True}
 
+def run_nuclei(domain, progress_callback=None):
+    if progress_callback:
+        progress_callback("🧬 Nuclei scanning for vulnerabilities...")
+    cmd = ["nuclei", "-u", f"http://{domain}", "-severity", "critical,high,medium", "-silent", "-json"]
+    res = run_command(cmd, timeout=300)
+    return res['stdout']
+
 def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
     if tools is None:
-        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox", "nuclei"]
-            elif tool == "nuclei":
-                return ("nuclei", run_nuclei(domain, progress_callback=None))
+        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei"]
+
     results = {}
 
-    # ----- Heavy tools (sequential, settings depend on deep) -----
+    # ----- Heavy tools (sequential) -----
     if "nmap" in tools:
         progress_callback("⚡ Nmap (full power)" if deep else "⚡ Nmap scanning...")
         if deep:
@@ -60,8 +66,8 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
         else:
             results['metagoofil'] = "No metadata found or command failed."
 
-    # ----- Light tools (parallel only in deep mode, else sequential) -----
-    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox")]
+    # ----- Light tools (parallel in deep mode, else sequential) -----
+    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei")]
 
     if deep and light_tools:
         progress_callback(f"⚡ Running {len(light_tools)} light tools in parallel...")
@@ -83,6 +89,8 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 return ("sherlock", run_command(["sherlock",company,"--timeout","20"], timeout=200)['stdout'])
             elif tool == "dalfox":
                 return ("dalfox", run_command(["dalfox","url",f"http://{domain}","--silence"], timeout=200)['stdout'])
+            elif tool == "nuclei":
+                return ("nuclei", run_nuclei(domain, progress_callback=None))
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(run_light, t): t for t in light_tools}
@@ -93,7 +101,6 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 except Exception as e:
                     results[futures[future]] = f"[!] Parallel error: {e}"
     else:
-        # sequential execution for standard mode
         for tool in light_tools:
             progress_callback(f"⚡ Running {tool}...")
             if tool == "whatweb":
@@ -112,12 +119,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 results['sherlock'] = run_command(["sherlock",domain.split('.')[0],"--timeout","20"], timeout=200)['stdout']
             elif tool == "dalfox":
                 results['dalfox'] = run_command(["dalfox","url",f"http://{domain}","--silence"], timeout=200)['stdout']
-def run_nuclei(domain, progress_callback=None):
-    """Run Nuclei on a domain and return the output."""
-    if progress_callback:
-        progress_callback("🧬 Nuclei scanning for vulnerabilities...")
-    cmd = ["nuclei", "-u", f"http://{domain}", "-severity", "critical,high,medium", "-silent", "-json"]
-    res = run_command(cmd, timeout=300)
-    # Parse JSON output if needed, but we can pass the raw JSON to the report
-    return res['stdout']
+            elif tool == "nuclei":
+                results['nuclei'] = run_nuclei(domain, progress_callback=None)
+
     return results
