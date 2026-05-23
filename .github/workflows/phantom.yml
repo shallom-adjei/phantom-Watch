@@ -58,6 +58,7 @@ jobs:
           wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.7.0/subfinder_2.7.0_linux_amd64.zip
           unzip -q subfinder_2.7.0_linux_amd64.zip
           sudo mv subfinder /usr/local/bin/
+          nuclei -update-templates
 
       - name: Run Phantom Watch
         env:
