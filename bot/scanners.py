@@ -10,7 +10,7 @@ def run_command(cmd, timeout=150):
 
 def run_scan(domain, email="", progress_callback=None, tools=None):
     if tools is None:
-        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock"]
+        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox"]
     results = {}
     step_map = {"nmap":1,"nikto":2,"whatweb":3,"theHarvester":4,"dnstwist":5,"metagoofil":6,"sherlock":7}
     for tool in tools:
