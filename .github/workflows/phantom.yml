@@ -55,8 +55,8 @@ jobs:
 
       - name: Install Subfinder
         run: |
-          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
-          unzip -q subfinder_2.6.6_linux_amd64.zip
+          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.7.0/subfinder_2.7.0_linux_amd64.zip
+          unzip -q subfinder_2.7.0_linux_amd64.zip
           sudo mv subfinder /usr/local/bin/
 
       - name: Run Phantom Watch
