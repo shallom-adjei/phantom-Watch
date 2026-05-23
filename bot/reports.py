@@ -1,4 +1,4 @@
-"""Professional report with Nuclei, Subfinder, and FFUF."""
+"""Professional report with safe code blocks."""
 import re
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -49,6 +49,13 @@ def compute_threat_score(results):
 def clean_ansi(text):
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
+def safe_code_block(content, max_len=800):
+    """Return a Markdown code block with sanitised content."""
+    safe = content.replace("```", "'''")
+    if len(safe) > max_len:
+        safe = safe[:max_len]
+    return "```\n" + safe + "\n```"
+
 def build_report_markdown(domain, results, detailed=False, deep=False, show_compliance=True):
     score, level = compute_threat_score(results)
     risk_emoji = {"LOW":"🟢","MEDIUM":"🟡","HIGH":"🟠","CRITICAL":"🔴"}.get(level,"⚪")
@@ -94,29 +101,18 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
         else:
             lines.append("🦠 Dalfox: No XSS found.")
-    if 'nuclei' in results:
-        if results['nuclei'] and "Error" not in str(results['nuclei']) and results['nuclei'].strip():
-            lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
+    if 'nuclei' in results and results['nuclei'] and "Error" not in str(results['nuclei']) and results['nuclei'].strip():
+        lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
     if 'subfinder' in results:
         subs = results['subfinder'].strip().split('\n') if results['subfinder'].strip() else []
-        # Filter out info lines and the original domain
         real_subs = [s for s in subs if s and not s.startswith('[') and s != domain]
-        if real_subs:
-            lines.append(f"🌐 Subfinder: {len(real_subs)} subdomains discovered")
-        else:
-            lines.append("🌐 Subfinder: No subdomains found.")
+        if real_subs: lines.append(f"🌐 Subfinder: {len(real_subs)} subdomains discovered")
+        else: lines.append("🌐 Subfinder: No subdomains found.")
     if 'ffuf' in results:
         paths = results['ffuf'].strip().split('\n') if results['ffuf'].strip() else []
-        if paths:
-            lines.append(f"🌀 FFUF: {len(paths)} hidden paths discovered")
-        else:
-            lines.append("🌀 FFUF: No hidden paths found.")
-    if 'amass' in results:
-        subs = results['amass'].strip().split('\n') if results['amass'].strip() else []
-        if subs:
-            lines.append(f"🌐 Amass: {len(subs)} live subdomains discovered")
-        else:
-            lines.append("🌐 Amass: No live subdomains found.")
+        if paths: lines.append(f"🌀 FFUF: {len(paths)} hidden paths discovered")
+        else: lines.append("🌀 FFUF: No hidden paths found.")
+
     # Detailed paid report
     if detailed:
         lines.append("")
@@ -135,7 +131,6 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             ("🦠 Dalfox", 'dalfox'),
             ("🌐 Subfinder", 'subfinder'),
             ("🌀 FFUF Hidden Paths", 'ffuf'),
-            ("🌐 Amass Live Subdomains", 'amass'),
         ]
         for label, key in tools:
             if key in results and "Error" not in str(results.get(key, "")):
@@ -143,23 +138,16 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                 if key == "theHarvester" and raw in ("No email", "No results"):
                     continue
                 if key == "subfinder":
-                    # Show the first 15 lines of subdomains
                     lines_raw = raw.strip().split('\n')
                     real_subs = [l for l in lines_raw if l and not l.startswith('[') and l != domain]
                     snippet = "\n".join(real_subs[:15]) if real_subs else "No live subdomains found."
                 else:
                     safe = raw.replace("```", "'''")
-                    snippet = safe[:300]
-                safe = raw.replace("```", "'''")[:300]
+                    snippet = safe[:300] if safe.strip() else "No findings."
                 lines.append(label)
-                lines.append("```")
-                if safe.strip():
-                    lines.append(safe)
-                else:
-                    lines.append("No findings.")
-                lines.append("```")
+                lines.append(safe_code_block(snippet))
 
-        # Nuclei explicit block (always shown)
+        # Nuclei block (only if run)
         if 'nuclei' in results:
             nuclei_out = results['nuclei']
             if not nuclei_out or "Error" in nuclei_out:
@@ -167,9 +155,10 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             else:
                 nuclei_text = clean_ansi(nuclei_out).replace("```", "'''")[:500]
             lines.append("🧬 Nuclei Findings")
-            lines.append("```")
-            lines.append(nuclei_text)
-            # Compliance table
+            lines.append(safe_code_block(nuclei_text))
+
+        # Compliance table (only for full scans)
+        if show_compliance:
             lines.append("")
             lines.append("📜 Compliance")
             compliance_lines = ["COMPLIANCE STATUS"]
@@ -182,12 +171,12 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                 elif category == "typosquatting" and "dnstwist" in results and "registered" in str(results.get("dnstwist","")).lower(): status = "❌"
                 elif category == "metadata_leak" and "metagoofil" in results and "No metadata" not in results.get("metagoofil",""): status = "❌"
                 elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")): status = "❌"
-                compliance_lines.append(f"{status} {category}: PCI {rules["pci"]} / HIPAA {rules["hipaa"]}")
-            lines.append("```")
-            lines.extend(compliance_lines)
-            lines.append("```")
+                compliance_lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
+            lines.append(safe_code_block("\n".join(compliance_lines)))
             lines.append("")
             lines.append("⚠️ For full compliance documentation, contact admin.")
+    else:
+        lines.append("")
         lines.append(f"⚠️ This is a FREE summary. Upgrade for detailed reports.\nContact admin: @{ADMIN_USERNAME}")
 
     return "\n".join(lines)

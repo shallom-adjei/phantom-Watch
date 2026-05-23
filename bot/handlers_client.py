@@ -465,8 +465,8 @@ async def handle_scan_domain(update, context):
     c.execute("SELECT plan FROM clients WHERE username=?", (username,))
     row = c.fetchone()
     plan = row[0] if row else "free"
-    deep = (plan == "enterprise")
     context.user_data["plan"] = plan   # remember for later
+    deep = (plan == "enterprise")
 
     try:
         results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools, deep)
