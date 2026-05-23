@@ -67,16 +67,22 @@ jobs:
 
       - name: Install Gitleaks
         run: |
-          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_amd64.tar.gz
-          tar xzf gitleaks_8.18.4_linux_amd64.tar.gz
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.2/gitleaks_8.18.2_linux_amd64.tar.gz
+          tar xzf gitleaks_8.18.2_linux_amd64.tar.gz
           sudo mv gitleaks /usr/local/bin/
 
       - name: Install Amass and MassDNS
         run: |
+          # Amass
           wget -q https://github.com/owasp-amass/amass/releases/download/v4.2.0/amass_linux_amd64.zip
           unzip -q amass_linux_amd64.zip
           sudo mv amass_linux_amd64/amass /usr/local/bin/
-          sudo apt-get install -y massdns
+          # MassDNS (build from source)
+          sudo apt-get install -y build-essential git
+          git clone https://github.com/blechschmidt/massdns.git /tmp/massdns
+          cd /tmp/massdns && make && sudo cp bin/massdns /usr/local/bin/
+          # Download resolvers list
+          wget -q https://raw.githubusercontent.com/blechschmidt/massdns/master/lists/resolvers.txt -O /tmp/resolvers.txt
 
       - name: Run Phantom Watch
         env:

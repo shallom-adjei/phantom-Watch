@@ -57,7 +57,9 @@ def run_massdns(subs, progress_callback=None):
     # Run MassDNS with a public resolver
     cmd = ["massdns", "-r", "/home/runner/resolvers.txt", "-t", "A", "-o", "S", "/tmp/subs.txt"]
     # We need a resolvers file; download a trusted list
-    subprocess.run(["wget", "-q", "https://raw.githubusercontent.com/blechschmidt/massdns/master/lists/resolvers.txt", "-O", "/home/runner/resolvers.txt"], check=True)
+    # Use the resolvers file already downloaded in the workflow
+    resolvers_path = "/tmp/resolvers.txt"
+    cmd = ["massdns", "-r", resolvers_path, "-t", "A", "-o", "S", "/tmp/subs.txt"]
     res = run_command(cmd, timeout=60)
     # Parse output: only lines with an A record
     live = set()
