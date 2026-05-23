@@ -478,14 +478,13 @@ async def handle_scan_domain(update, context):
         await progress_msg.delete()
     except:
         pass
-
     if results:
             # Use the plan we saved before the scan (more reliable)
             plan = context.user_data.get("plan", "free")
             detailed = plan in ("monthly", "enterprise")
 
-        print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
-        try:
+            print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
+            try:
             from bot.reports import build_report_markdown
             show_compliance = (context.user_data.get("scan_type") == "full")
             report_md = build_report_markdown(domain, results, detailed, deep, show_compliance)
