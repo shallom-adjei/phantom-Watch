@@ -462,15 +462,26 @@ async def handle_scan_domain(update, context):
         try:
             from bot.reports import build_report_markdown
             report_md = build_report_markdown(domain, results, detailed, deep)
-            await context.bot.send_message(chat_id=chat_id, text=report_md, parse_mode="Markdown")
-            print(f"[DEBUG] Single message report sent")
+            # Split long reports into chunks of 3500 characters
+            chunk_size = 3500
+            for i in range(0, len(report_md), chunk_size):
+                chunk = report_md[i:i+chunk_size]
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="Markdown")
+                except Exception as send_err:
+                    # If Markdown fails, send as plain text
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=chunk)
+                    except:
+                        pass
+            print(f"[DEBUG] Report sent in {(len(report_md) // chunk_size) + 1} chunks")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            await context.bot.send_message(chat_id=chat_id, text=f"❌ Report delivery failed: {e}")
-        if plan == "free":
-            c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
-            conn.commit()
+            try:
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ Report generation failed. Please contact admin.")
+            except:
+                pass
 
         # Exploitation proof for enterprise
         if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():

@@ -85,7 +85,10 @@ async def message_router(update, context):
         except Exception as e:
             print(f"[ERROR] handle_scan_domain crashed: {e}")
             traceback.print_exc()
-            await update.message.reply_text("❌ Scan encountered an internal error.")
+            try:
+                await update.message.reply_text("❌ Scan encountered an internal error.")
+            except:
+                pass
             context.user_data.pop("state", None)
             return
 
