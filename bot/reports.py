@@ -1,4 +1,4 @@
-"""Professional report: brief summary for all, detailed code blocks for paid users."""
+"""Professional report with Nuclei, Subfinder, and FFUF."""
 import re
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -100,7 +100,12 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
         subs = results['subfinder'].strip().split('\n') if results['subfinder'].strip() else []
         if subs: lines.append(f"🌐 Subfinder: {len(subs)} subdomains discovered")
         else: lines.append("🌐 Subfinder: No subdomains found.")
-
+    if 'ffuf' in results:
+        paths = results['ffuf'].strip().split('\n') if results['ffuf'].strip() else []
+        if paths:
+            lines.append(f"🌀 FFUF: {len(paths)} hidden paths discovered")
+        else:
+            lines.append("🌀 FFUF: No hidden paths found.")
     # Detailed paid report
     if detailed:
         lines.append("")
@@ -118,6 +123,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
             ("👥 Sherlock", 'sherlock'),
             ("🦠 Dalfox", 'dalfox'),
             ("🌐 Subfinder", 'subfinder'),
+            ("🌀 FFUF Hidden Paths", 'ffuf'),
         ]
         for label, key in tools:
             if key in results and results[key] and "Error" not in str(results[key]):

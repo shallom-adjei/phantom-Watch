@@ -37,5 +37,6 @@ def quick_scan_menu():
          InlineKeyboardButton("🦠 XSS Check", callback_data="quick_xss")],
         [InlineKeyboardButton("🌐 Subdomain Discovery", callback_data="quick_subfinder")],
         [InlineKeyboardButton("🧬 Nuclei Scan", callback_data="quick_nuclei")],
+        [InlineKeyboardButton("🌀 FFUF Directory Fuzzing", callback_data="quick_ffuf")],
         [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ])
