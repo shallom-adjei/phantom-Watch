@@ -1,5 +1,14 @@
-"""Scan engine – standard (fast) and deep (full power) modes, with Nuclei & Subfinder."""
+"""Scan engine – full power, with Nuclei, Subfinder, and FFUF."""
 import subprocess, os, shutil, concurrent.futures
+
+# Small built‑in wordlist for directory fuzzing
+COMMON_PATHS = [
+    "admin", "login", "wp-admin", "backup", "test", "dev", "staging",
+    "api", "v1", "v2", "console", "dashboard", "config", ".git", ".env",
+    "robots.txt", "sitemap.xml", "phpmyadmin", "db", "old", "new", "beta",
+    "cron", "tmp", "private", "uploads", "downloads", "images", "js", "css",
+    "includes", "vendor", "node_modules", "logs", "backup.zip", "backup.tar.gz",
+]
 
 def run_command(cmd, timeout=150):
     try:
@@ -26,9 +35,36 @@ def run_subfinder(domain, progress_callback=None):
         return res['stdout'].strip().split('\n')
     return []
 
+def run_ffuf(domain, progress_callback=None):
+    """Fuzz for hidden directories using a built‑in wordlist."""
+    if progress_callback:
+        progress_callback("🌀 FFUF fuzzing for hidden paths...")
+    # Write wordlist to a temp file
+    wordlist_path = "/tmp/ffuf_wordlist.txt"
+    with open(wordlist_path, "w") as f:
+        f.write("\n".join(COMMON_PATHS))
+    # Run ffuf
+    cmd = [
+        "ffuf", "-u", f"http://{domain}/FUZZ",
+        "-w", wordlist_path,
+        "-mc", "200,301,302,403",  # match these status codes
+        "-of", "csv",              # output as CSV for easy parsing
+        "-s"                       # silent mode
+    ]
+    res = run_command(cmd, timeout=120)
+    # Parse CSV output: return list of found paths
+    lines = res['stdout'].strip().split('\n')
+    found = []
+    for line in lines:
+        if line and not line.startswith("FUZZ,"):  # skip header
+            parts = line.split(',')
+            if len(parts) >= 1:
+                found.append(parts[0])
+    return "\n".join(found) if found else ""
+
 def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
     if tools is None:
-        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder"]
+        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf"]
 
     results = {}
 
@@ -76,7 +112,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
             results['metagoofil'] = "No public documents with metadata found (normal for this target)."
 
     # ----- Light tools (parallel in deep mode, else sequential) -----
-    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei","subfinder")]
+    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei","subfinder","ffuf")]
 
     if deep and light_tools:
         progress_callback(f"⚡ Running {len(light_tools)} light tools in parallel...")
@@ -102,6 +138,8 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 return ("nuclei", run_nuclei(domain, progress_callback=None))
             elif tool == "subfinder":
                 return ("subfinder", "\n".join(run_subfinder(domain)))
+            elif tool == "ffuf":
+                return ("ffuf", run_ffuf(domain))
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(run_light, t): t for t in light_tools}
@@ -135,5 +173,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
             elif tool == "subfinder":
                 subs = run_subfinder(domain)
                 results['subfinder'] = "\n".join(subs)
+            elif tool == "ffuf":
+                results['ffuf'] = run_ffuf(domain)
 
     return results

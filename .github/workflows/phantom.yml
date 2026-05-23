@@ -52,13 +52,20 @@ jobs:
           wget -q https://github.com/projectdiscovery/nuclei/releases/download/v3.3.7/nuclei_3.3.7_linux_amd64.zip
           unzip -q nuclei_3.3.7_linux_amd64.zip
           sudo mv nuclei /usr/local/bin/
+          nuclei -update-templates
 
       - name: Install Subfinder
         run: |
           wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.7.0/subfinder_2.7.0_linux_amd64.zip
           unzip -q subfinder_2.7.0_linux_amd64.zip
           sudo mv subfinder /usr/local/bin/
-          nuclei -update-templates
+
+      - name: Install FFUF
+        run: |
+          wget -q https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_linux_amd64.tar.gz
+          tar xzf ffuf_2.1.0_linux_amd64.tar.gz
+          sudo mv ffuf /usr/local/bin/
+          ffuf -V
 
       - name: Run Phantom Watch
         env:
