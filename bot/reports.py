@@ -161,17 +161,18 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
 
 
         if show_compliance:
-            # Compliance table
-        lines.append("")
-        lines.append("📜 Compliance")
-        compliance_lines = ["COMPLIANCE STATUS"]
-        for category, rules in COMPLIANCE.items():
-            status = "✅"
-            if category == "xss" and "dalfox" in results and "vulnerable" in results.get("dalfox","").lower(): status = "❌"
-            elif category == "open_port" and "open" in str(results.get("nmap","")): status = "❌"
-            elif category == "vulnerable_service" and "VULNERABLE" in str(results.get("nmap","")): status = "❌"
-            elif category == "leaked_email" and "theHarvester" in results and "Leaked" in str(results.get("theHarvester","")): status = "❌"
-            elif category == "typosquatting" and "dnstwist" in results and "registered" in str(results.get("dnstwist","")).lower(): status = "❌"
+                
+                # Compliance table
+            lines.append("")
+            lines.append("📜 Compliance")
+            compliance_lines = ["COMPLIANCE STATUS"]
+            for category, rules in COMPLIANCE.items():
+                status = "✅"
+                if category == "xss" and "dalfox" in results and "vulnerable" in results.get("dalfox","").lower(): status = "❌"
+                elif category == "open_port" and "open" in str(results.get("nmap","")): status = "❌"
+                elif category == "vulnerable_service" and "VULNERABLE" in str(results.get("nmap","")): status = "❌"
+                elif category == "leaked_email" and "theHarvester" in results and "Leaked" in str(results.get("theHarvester","")): status = "❌"
+                elif category == "typosquatting" and "dnstwist" in results and "registered" in str(results.get("dnstwist","")).lower(): status = "❌"
             elif category == "metadata_leak" and "metagoofil" in results and "No metadata" not in results.get("metagoofil",""): status = "❌"
             elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")): status = "❌"
             compliance_lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
