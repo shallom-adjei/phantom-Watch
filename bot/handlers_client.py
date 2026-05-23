@@ -414,13 +414,18 @@ async def handle_scan_domain(update, context):
     email = row[0] if row else ""
     tools = context.user_data.get("tools", None)
 
+    # Determine if this is a deep scan (enterprise users)
+    c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+    row = c.fetchone()
+    plan = row[0] if row else "free"
+    deep = (plan == "enterprise")
+
     try:
-        results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools)
+        results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools, deep)
     except Exception as e:
         traceback.print_exc()
         await update.message.reply_text(f"❌ Scan crashed: {e}")
         results = None
-
     try:
         await progress_msg.delete()
     except:
