@@ -73,20 +73,17 @@ jobs:
           tar xzf gitleaks_8.18.2_linux_x64.tar.gz
           sudo mv gitleaks /usr/local/bin/
 
-      - name: Install Amass and MassDNS
+      - name: Install Amass (static binary)
         run: |
-          # Amass - download the single binary
-          wget -q https://github.com/owasp-amass/amass/releases/download/v4.2.0/amass_linux_amd64.zip
-          unzip -q amass_linux_amd64.zip
-          # The binary is inside a subdirectory; we'll find and move it
-          AMASS_BIN=$(find . -type f -name amass -executable | head -1)
-          if [ -z "$AMASS_BIN" ]; then echo "Amass binary not found"; exit 1; fi
-          sudo mv "$AMASS_BIN" /usr/local/bin/amass
-          # MassDNS
+          wget -q https://github.com/owasp-amass/amass/releases/download/v4.2.0/amass_Linux_amd64.tar.gz
+          tar xzf amass_Linux_amd64.tar.gz
+          sudo mv amass /usr/local/bin/
+
+      - name: Install MassDNS
+        run: |
           sudo apt-get install -y build-essential git
           git clone --depth 1 https://github.com/blechschmidt/massdns.git /tmp/massdns
           cd /tmp/massdns && make -j$(nproc) && sudo cp bin/massdns /usr/local/bin/
-          # Download resolvers
           wget -q https://raw.githubusercontent.com/blechschmidt/massdns/master/lists/resolvers.txt -O /tmp/resolvers.txt
 
       - name: Run Phantom Watch

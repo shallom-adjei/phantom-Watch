@@ -94,8 +94,6 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
     if 'nuclei' in results:
         if results['nuclei'] and "Error" not in str(results['nuclei']) and results['nuclei'].strip():
             lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
-        else:
-            lines.append("🧬 Nuclei: No known vulnerabilities found.")
     if 'subfinder' in results:
         subs = results['subfinder'].strip().split('\n') if results['subfinder'].strip() else []
         if subs: lines.append(f"🌐 Subfinder: {len(subs)} subdomains discovered")
@@ -144,15 +142,16 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
                 lines.append("```")
 
         # Nuclei explicit block (always shown)
-        nuclei_out = results.get('nuclei', '')
-        if not nuclei_out or "Error" in nuclei_out:
-            nuclei_text = "No vulnerabilities detected – target may be behind Cloudflare/WAF (403 Forbidden) or no issues found."
-        else:
-            nuclei_text = clean_ansi(nuclei_out).replace("```", "'''")[:500]
-        lines.append("🧬 Nuclei Findings")
-        lines.append("```")
-        lines.append(nuclei_text)
-        lines.append("```")
+        if 'nuclei' in results:
+            nuclei_out = results['nuclei']
+            if not nuclei_out or "Error" in nuclei_out:
+                nuclei_text = "No vulnerabilities detected – target may be behind Cloudflare/WAF (403 Forbidden) or no issues found."
+            else:
+                nuclei_text = clean_ansi(nuclei_out).replace("```", "'''")[:500]
+            lines.append("🧬 Nuclei Findings")
+            lines.append("```")
+            lines.append(nuclei_text)
+            lines.append("```")
 
         # Compliance table
         lines.append("")
