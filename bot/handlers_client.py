@@ -463,8 +463,8 @@ async def handle_scan_domain(update, context):
 
     # Determine if this is a deep scan (enterprise users)
     c.execute("SELECT plan FROM clients WHERE username=?", (username,))
-        context.user_data["plan"] = plan   # remember plan for later
-        context.user_data["plan"] = plan   # remember plan for later
+    context.user_data["plan"] = plan   # remember plan for later
+    context.user_data["plan"] = plan   # remember plan for later
     plan = row[0] if row else "free"
     deep = (plan == "enterprise")
 
