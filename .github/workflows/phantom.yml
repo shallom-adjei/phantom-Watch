@@ -15,15 +15,21 @@ jobs:
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
+
+      # Restore database from previous run
+      - name: Restore database
+        uses: actions/download-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          name: phantom-db
+          path: .
+        continue-on-error: true
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y nmap nikto whatweb git python3-pip curl fonts-dejavu-core
 
-      - name: Install Python tools (pip) system-wide
+      - name: Install Python tools
         run: |
           sudo pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog
 
@@ -65,17 +71,12 @@ jobs:
           tar xzf gitleaks_8.18.2_linux_x64.tar.gz
           sudo mv gitleaks /usr/local/bin/
 
-      - name: Install Amass (robust extraction)
+      - name: Install Amass (robust)
         run: |
           wget -q https://github.com/owasp-amass/amass/releases/download/v4.2.0/amass_linux_amd64.zip
           unzip -q amass_linux_amd64.zip
-          # Find the amass binary, no matter which subfolder it's in
           AMASS_BIN=$(find . -type f -name amass -executable -print -quit)
-          if [ -z "$AMASS_BIN" ]; then
-            echo "Amass binary not found. Listing contents for debugging:"
-            find . -type f | head -20
-            exit 1
-          fi
+          if [ -z "$AMASS_BIN" ]; then echo "Amass binary not found"; exit 1; fi
           sudo mv "$AMASS_BIN" /usr/local/bin/amass
 
       - name: Install MassDNS
@@ -92,7 +93,10 @@ jobs:
           HIBP_API_KEY: ${{ secrets.HIBP_API_KEY }}
         run: python3 -m bot.main
 
-      - name: Restore database from db branch
-        run: |
-          git fetch origin db
-          git checkout origin/db -- phantom_clients.db 2>/dev/null || echo "No database to restore"
+      # Save database for next run
+      - name: Save database
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phantom-db
+          path: phantom_clients.db

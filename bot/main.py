@@ -114,10 +114,6 @@ async def background_tasks(app):
 
 import subprocess, time
 
-async def auto_save_db():
-    """Commit and push phantom_clients.db to the 'db' branch every 5 minutes."""
-    while True:
-        await asyncio.sleep(300)  # 5 minutes
         try:
             # Only push if the file has changed
             subprocess.run(["git", "add", "phantom_clients.db"], check=False)
