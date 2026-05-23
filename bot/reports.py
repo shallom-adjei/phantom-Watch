@@ -166,15 +166,10 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
         lines.append(f"👥 Sherlock: {found} social accounts found")
     if 'dalfox' in results and "vulnerable" in results['dalfox'].lower():
         lines.append("🦠 Dalfox: XSS vulnerabilities detected!")
-
-        if 'nuclei' in results and results['nuclei']:
-            raw = clean_ansi(results['nuclei'])
-            safe = raw.replace("```", "'''")
-            snippet = safe[:500]
-            lines.append("🧬 Nuclei Findings")
-            lines.append("```")
-            lines.append(snippet)
-            lines.append("```")
+    if 'nuclei' in results and results['nuclei']:
+        lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
+    else:
+        lines.append("🧬 Nuclei: No known vulnerabilities found.")
 
     # For paid users, add a separated detailed section
     if detailed:
@@ -192,6 +187,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
             ("📄 Metagoofil", 'metagoofil'),
             ("👥 Sherlock", 'sherlock'),
             ("🦠 Dalfox", 'dalfox'),
+            ("🧬 Nuclei Findings", 'nuclei'),
         ]
         for label, key in tools:
             if key in results and results[key] and "Error" not in str(results[key]):
