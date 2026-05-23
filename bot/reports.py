@@ -157,12 +157,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             lines.append("🧬 Nuclei Findings")
             lines.append("```")
             lines.append(nuclei_text)
-            lines.append("```")
-
-
-        if show_compliance:
-                
-                # Compliance table
+            # Compliance table
             lines.append("")
             lines.append("📜 Compliance")
             compliance_lines = ["COMPLIANCE STATUS"]
@@ -173,16 +168,14 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                 elif category == "vulnerable_service" and "VULNERABLE" in str(results.get("nmap","")): status = "❌"
                 elif category == "leaked_email" and "theHarvester" in results and "Leaked" in str(results.get("theHarvester","")): status = "❌"
                 elif category == "typosquatting" and "dnstwist" in results and "registered" in str(results.get("dnstwist","")).lower(): status = "❌"
-            elif category == "metadata_leak" and "metagoofil" in results and "No metadata" not in results.get("metagoofil",""): status = "❌"
-            elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")): status = "❌"
-            compliance_lines.append(f"{status} {category}: PCI {rules['pci']} / HIPAA {rules['hipaa']}")
-        lines.append("```")
-        lines.extend(compliance_lines)
-        lines.append("```")
-        lines.append("")
-        lines.append("⚠️ For full compliance documentation, contact admin.")
-    else:
-        lines.append("")
+                elif category == "metadata_leak" and "metagoofil" in results and "No metadata" not in results.get("metagoofil",""): status = "❌"
+                elif category == "social_media" and "sherlock" in results and "accounts found" in str(results.get("sherlock","")): status = "❌"
+                compliance_lines.append(f"{status} {category}: PCI {rules["pci"]} / HIPAA {rules["hipaa"]}")
+            lines.append("```")
+            lines.extend(compliance_lines)
+            lines.append("```")
+            lines.append("")
+            lines.append("⚠️ For full compliance documentation, contact admin.")
         lines.append(f"⚠️ This is a FREE summary. Upgrade for detailed reports.\nContact admin: @{ADMIN_USERNAME}")
 
     return "\n".join(lines)
