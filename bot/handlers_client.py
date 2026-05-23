@@ -328,6 +328,33 @@ async def handle_client_message(update, context):
         await update.message.reply_text("Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
         return True
 
+    # Auto-detect GitHub URLs even if state is wrong
+    if text.startswith("https://github.com/"):
+        await update.message.reply_text("🔑 Scanning GitHub repository...")
+        try:
+            repo_url = text.strip()
+            repo_name = repo_url.rstrip("/").split("/")[-1]
+            clone_dir = f"/tmp/{repo_name}_{random.randint(1000,9999)}"
+            subprocess.run(["git", "clone", "--depth=1", repo_url, clone_dir], check=True, timeout=30)
+            result = subprocess.run(["gitleaks", "detect", "--source", clone_dir, "--no-git", "--report-format", "json", "--exit-code", "0"], capture_output=True, text=True, timeout=120)
+            shutil.rmtree(clone_dir, ignore_errors=True)
+            if result.stdout.strip():
+                findings = json.loads(result.stdout)
+                if findings:
+                    summary = f"🔑 *Gitleaks Found {len(findings)} secrets!*\n"
+                    for f in findings[:5]:
+                        file_path = f.get("File", "unknown")
+                        rule = f.get("Description", "Unknown")
+                        summary += f"• {rule} in `{file_path}`\n"
+                    await update.message.reply_text(summary, parse_mode="Markdown")
+                else:
+                    await update.message.reply_text("✅ No secrets detected.")
+            else:
+                await update.message.reply_text("✅ No secrets detected.")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Gitleaks scan failed: {e}")
+        return True
+
     if state == "SET_EMAIL":
         if "@" not in text:
             await update.message.reply_text("Invalid email.")
