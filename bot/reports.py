@@ -125,7 +125,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
     lines = []
 
     # Header
-    lines.append(f"🔍 Scan completed for {domain}"
+    lines.append(f"🔍 Scan completed for {domain}")
     lines.append("")
     lines.append(f"{risk_emoji} Threat Score: {score}/100  |  Risk Level: {level}")
     if deep:
