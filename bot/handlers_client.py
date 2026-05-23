@@ -106,8 +106,8 @@ async def quick_scan_subhandler(update, context):
     if not is_active(username):
         await safe_edit(query, "⛔ Not authorized or trial expired.")
         return
-    if data == "quick_nuclei":
-        tools = ["nuclei"]
+
+    tools = None
     if data == "quick_ports":
         tools = ["nmap", "nikto"]
     elif data == "quick_osint":
@@ -116,6 +116,8 @@ async def quick_scan_subhandler(update, context):
         tools = ["subfinder"]
     elif data == "quick_ffuf":
         tools = ["ffuf"]
+    elif data == "quick_nuclei":
+        tools = ["nuclei"]
     elif data == "quick_recon":
         tools = ["whatweb", "dnstwist", "metagoofil"]
     elif data == "quick_xss":
@@ -123,6 +125,20 @@ async def quick_scan_subhandler(update, context):
     elif data == "quick_amass":
         tools = ["amass"]
     elif data == "quick_gitleaks":
+        # Gitleaks requires a GitHub URL – set state and return immediately
+        context.user_data["state"] = "GITHUB_SCAN"
+        await query.edit_message_text("🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):")
+        return
+
+    if tools is None:
+        # fallback – should never happen
+        tools = []
+
+    context.user_data["state"] = "SCAN_DOMAIN"
+    context.user_data["tools"] = tools
+    context.user_data["scan_type"] = "quick"
+    await safe_edit(query, "📌 Send the domain name to scan.")
+
         # Gitleaks requires a GitHub URL, so we'll set a special state
         context.user_data["state"] = "GITHUB_SCAN"
         await query.edit_message_text("🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):")
