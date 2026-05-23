@@ -35,6 +35,7 @@ def quick_scan_menu():
          InlineKeyboardButton("🌐 OSINT Pack", callback_data="quick_osint")],
         [InlineKeyboardButton("🔎 Recon", callback_data="quick_recon"),
          InlineKeyboardButton("🦠 XSS Check", callback_data="quick_xss")],
-        [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
+        [InlineKeyboardButton("🌐 Subdomain Discovery", callback_data="quick_subfinder")],
         [InlineKeyboardButton("🧬 Nuclei Scan", callback_data="quick_nuclei")],
+        [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ])

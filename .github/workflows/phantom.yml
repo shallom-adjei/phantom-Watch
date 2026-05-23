@@ -25,6 +25,15 @@ jobs:
           unzip -q nuclei_3.3.7_linux_amd64.zip
           sudo mv nuclei /usr/local/bin/
           nuclei -version
+      - name: Install Subfinder and MassDNS
+        run: |
+          wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip
+          unzip -q subfinder_2.6.6_linux_amd64.zip
+          sudo mv subfinder /usr/local/bin/
+          wget -q https://github.com/blechschmidt/massdns/archive/refs/tags/v1.0.0.tar.gz
+          tar xzf v1.0.0.tar.gz
+          cd massdns-1.0.0 && make && sudo make install
+          cd ..
       - name: Install Python tools
         run: |
           sudo pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog

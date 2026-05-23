@@ -171,6 +171,9 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
         lines.append("🧬 Nuclei: Vulnerabilities detected (see detailed report)")
     else:
         lines.append("🧬 Nuclei: No known vulnerabilities found.")
+    if 'subfinder' in results and results['subfinder']:
+        subs = results['subfinder'].strip().split('\n')
+        lines.append(f"🌐 Subfinder: {len(subs)} subdomains discovered")
 
     # For paid users, add a separated detailed section
     if detailed:
@@ -189,6 +192,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False):
             ("👥 Sherlock", 'sherlock'),
             ("🦠 Dalfox", 'dalfox'),
             ("🧬 Nuclei Findings", 'nuclei'),
+            ("🌐 Subfinder", 'subfinder'),
         ]
         for label, key in tools:
             if key in results and results[key] and "Error" not in str(results[key]):

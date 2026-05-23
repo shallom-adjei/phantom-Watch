@@ -10,6 +10,13 @@ def run_command(cmd, timeout=150):
     except Exception as e:
         return {"stdout": f"[!] Error: {e}", "returncode": -1, "failed": True}
 
+def run_subfinder(domain, progress_callback=None):
+    if progress_callback:
+        progress_callback("🔍 Subfinder enumerating subdomains...")
+    cmd = ["subfinder", "-d", domain, "-silent"]
+    res = run_command(cmd, timeout=120)
+    return res['stdout'].strip().split('\n') if res['stdout'].strip() else []
+
 def run_nuclei(domain, progress_callback=None):
     if progress_callback:
         progress_callback("🧬 Nuclei scanning for vulnerabilities...")
@@ -91,6 +98,8 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 return ("dalfox", run_command(["dalfox","url",f"http://{domain}","--silence"], timeout=200)['stdout'])
             elif tool == "nuclei":
                 return ("nuclei", run_nuclei(domain, progress_callback=None))
+            elif tool == "subfinder":
+                return ("subfinder", "\n".join(run_subfinder(domain)))
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(run_light, t): t for t in light_tools}
@@ -121,5 +130,8 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 results['dalfox'] = run_command(["dalfox","url",f"http://{domain}","--silence"], timeout=200)['stdout']
             elif tool == "nuclei":
                 results['nuclei'] = run_nuclei(domain, progress_callback=None)
+            elif tool == "subfinder":
+                subs = run_subfinder(domain)
+                results['subfinder'] = "\n".join(subs)
 
     return results
