@@ -112,8 +112,6 @@ async def quick_scan_subhandler(update, context):
         tools = ["nmap", "nikto"]
     elif data == "quick_osint":
         tools = ["theHarvester", "sherlock"]
-    elif data == "quick_subfinder":
-        tools = ["subfinder"]
     elif data == "quick_ffuf":
         tools = ["ffuf"]
     elif data == "quick_nuclei":
@@ -122,8 +120,8 @@ async def quick_scan_subhandler(update, context):
         tools = ["whatweb", "dnstwist", "metagoofil"]
     elif data == "quick_xss":
         tools = ["dalfox"]
-    elif data == "quick_amass":
-        tools = ["amass"]
+    elif data == "quick_subfinder_massdns":
+        tools = ["subfinder_massdns"]
     elif data == "quick_gitleaks":
         # Gitleaks requires a GitHub URL – set state and return immediately
         context.user_data["state"] = "GITHUB_SCAN"

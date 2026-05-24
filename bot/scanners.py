@@ -1,7 +1,6 @@
-"""Scan engine – full power, with Nuclei, Subfinder, and FFUF."""
-import subprocess, os, shutil, concurrent.futures
+"""Scan engine – full power, with combined Subfinder+MassDNS."""
+import subprocess, os, shutil, concurrent.futures, json, random
 
-# Small built‑in wordlist for directory fuzzing
 COMMON_PATHS = [
     "admin", "login", "wp-admin", "backup", "test", "dev", "staging",
     "api", "v1", "v2", "console", "dashboard", "config", ".git", ".env",
@@ -35,107 +34,60 @@ def run_subfinder(domain, progress_callback=None):
         return res['stdout'].strip().split('\n')
     return []
 
-def run_amass(domain, progress_callback=None):
-    """Safe passive Amass enumeration – fast, stable, low-noise."""
-    if progress_callback:
-        progress_callback("🔍 Amass (passive) enumerating subdomains...")
-    # Use full path to binary and the recommended passive flags
-    cmd = [
-        "/usr/local/bin/amass",
-        "enum",
-        "-passive",
-        "-norecursive",
-        "-noalts",
-        "-timeout", "10",
-        "-d", domain,
-        "-o", "/dev/stdout"   # explicitly write to stdout
-    ]
-    res = run_command(cmd, timeout=180)
-    if res['stdout'].strip():
-        # Filter out comment lines and empty entries
-        subdomains = [line.strip() for line in res['stdout'].split('\n')
-                      if line.strip() and not line.startswith("[")]
-        return subdomains
-    return []
-
-def run_massdns(subs, progress_callback=None):
-    """Verify live subdomains with MassDNS."""
-    if not subs:
-        return []
-    if progress_callback:
-        progress_callback("🔍 MassDNS verifying live subdomains...")
-    # Write subs to file
-    with open("/tmp/subs.txt", "w") as f:
-        f.write("\n".join(subs))
-    # Run MassDNS with a public resolver
-    cmd = ["massdns", "-r", "/tmp/resolvers.txt", "-t", "A", "-o", "S", "/tmp/subs.txt"]
-    # We need a resolvers file; download a trusted list
-    # Use the resolvers file already downloaded in the workflow
-    resolvers_path = "/tmp/resolvers.txt"
-    cmd = ["massdns", "-r", resolvers_path, "-t", "A", "-o", "S", "/tmp/subs.txt"]
-    res = run_command(cmd, timeout=60)
-    # Parse output: only lines with an A record
-    live = set()
-    for line in res['stdout'].split('\n'):
-        if line and " A " in line:
-            sub = line.split(" A ")[0].rstrip('.')
-            live.add(sub)
-    return list(live)
-
-def run_amass_massdns(domain, progress_callback=None):
-    subs = run_amass(domain, progress_callback)
-    if not subs:
-        return []
-    live = run_massdns(subs, progress_callback)
-    return live
-
-def run_gitleaks(repo_url, progress_callback=None):
-    """Clone a GitHub repo and scan for secrets using Gitleaks."""
-    if progress_callback:
-        progress_callback("🔑 Gitleaks scanning for secrets...")
-    repo_name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
-    clone_dir = f"/tmp/{repo_name}_{random.randint(1000,9999)}"
-    subprocess.run(["git", "clone", "--depth=1", repo_url, clone_dir], check=True, timeout=30)
-    cmd = ["gitleaks", "detect", "--source", clone_dir, "--no-git", "--report-format", "json", "--exit-code", "0"]
-    res = run_command(cmd, timeout=120)
-    shutil.rmtree(clone_dir, ignore_errors=True)
-    # Parse JSON output
-    try:
-        findings = json.loads(res['stdout'])
-        return findings
-    except:
-        return []
-
 def run_ffuf(domain, progress_callback=None):
-    """Fuzz for hidden directories using a built‑in wordlist."""
     if progress_callback:
         progress_callback("🌀 FFUF fuzzing for hidden paths...")
-    # Write wordlist to a temp file
     wordlist_path = "/tmp/ffuf_wordlist.txt"
     with open(wordlist_path, "w") as f:
         f.write("\n".join(COMMON_PATHS))
-    # Run ffuf
     cmd = [
         "ffuf", "-u", f"http://{domain}/FUZZ",
         "-w", wordlist_path,
-        "-mc", "200,301,302,403",  # match these status codes
-        "-of", "csv",              # output as CSV for easy parsing
-        "-s"                       # silent mode
+        "-mc", "200,301,302,403",
+        "-of", "csv",
+        "-s"
     ]
     res = run_command(cmd, timeout=120)
-    # Parse CSV output: return list of found paths
     lines = res['stdout'].strip().split('\n')
     found = []
     for line in lines:
-        if line and not line.startswith("FUZZ,"):  # skip header
+        if line and not line.startswith("FUZZ,"):
             parts = line.split(',')
             if len(parts) >= 1:
                 found.append(parts[0])
     return "\n".join(found) if found else ""
 
+def run_subfinder_massdns(domain, progress_callback=None):
+    """Passive subdomain discovery + live verification."""
+    if progress_callback:
+        progress_callback("🔍 Subfinder (passive) enumerating...")
+    # Step 1: Subfinder passive
+    subfinder_cmd = ["subfinder", "-d", domain, "-silent"]
+    sub_res = run_command(subfinder_cmd, timeout=60)
+    if sub_res['stdout'].strip():
+        subs = sub_res['stdout'].strip().split('\n')
+    else:
+        subs = [domain]
+    # Step 2: MassDNS live verification
+    with open("/tmp/subs.txt", "w") as f:
+        f.write("\n".join(subs))
+    massdns_cmd = [
+        "massdns", "-r", "/tmp/resolvers.txt",
+        "-t", "A", "-o", "S", "/tmp/subs.txt"
+    ]
+    mass_res = run_command(massdns_cmd, timeout=30)
+    live = set()
+    for line in mass_res['stdout'].split('\n'):
+        if " A " in line:
+            sub = line.split(" A ")[0].rstrip('.')
+            live.add(sub)
+    if live and progress_callback:
+        progress_callback(f"✅ {len(live)} live subdomains verified.")
+    return list(live) if live else []
+
 def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
     if tools is None:
-        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","amass"]
+        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"]
 
     results = {}
 
@@ -183,7 +135,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
             results['metagoofil'] = "No public documents with metadata found (normal for this target)."
 
     # ----- Light tools (parallel in deep mode, else sequential) -----
-    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei","subfinder","ffuf")]
+    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns")]
 
     if deep and light_tools:
         progress_callback(f"⚡ Running {len(light_tools)} light tools in parallel...")
@@ -211,8 +163,8 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 return ("subfinder", "\n".join(run_subfinder(domain)))
             elif tool == "ffuf":
                 return ("ffuf", run_ffuf(domain))
-            elif tool == "amass":
-                results['amass'] = "\n".join(run_amass_massdns(domain))
+            elif tool == "subfinder_massdns":
+                return ("subfinder_massdns", "\n".join(run_subfinder_massdns(domain)))
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(run_light, t): t for t in light_tools}
@@ -248,5 +200,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 results['subfinder'] = "\n".join(subs)
             elif tool == "ffuf":
                 results['ffuf'] = run_ffuf(domain)
+            elif tool == "subfinder_massdns":
+                results['subfinder_massdns'] = "\n".join(run_subfinder_massdns(domain))
 
     return results

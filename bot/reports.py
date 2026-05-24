@@ -112,6 +112,12 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
         paths = results['ffuf'].strip().split('\n') if results['ffuf'].strip() else []
         if paths: lines.append(f"🌀 FFUF: {len(paths)} hidden paths discovered")
         else: lines.append("🌀 FFUF: No hidden paths found.")
+    if 'subfinder_massdns' in results:
+        subs = results['subfinder_massdns'].strip().split('\n') if results['subfinder_massdns'].strip() else []
+        if subs:
+            lines.append(f"🌐 Subdomain Discovery: {len(subs)} live subdomains found")
+        else:
+            lines.append("🌐 Subdomain Discovery: No live subdomains found.")
 
     # Detailed paid report
     if detailed:
@@ -131,6 +137,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             ("🦠 Dalfox", 'dalfox'),
             ("🌐 Subfinder", 'subfinder'),
             ("🌀 FFUF Hidden Paths", 'ffuf'),
+            ("🌐 Subdomain Discovery", 'subfinder_massdns'),
         ]
         for label, key in tools:
             if key in results and "Error" not in str(results.get(key, "")):
