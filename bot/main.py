@@ -9,8 +9,16 @@ from bot.handlers_client import (
 from bot.handlers_admin import (
     admin_menu_handler, admin_adduser_handler, admin_verify_handler,
     admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
+    admin_update_prices_handler, admin_update_addresses_handler
+) import
+    admin_menu_handler, admin_adduser_handler, admin_verify_handler,
+    admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
 )
 from bot.handlers_admin import (
+    admin_menu_handler, admin_adduser_handler, admin_verify_handler,
+    admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
+    admin_update_prices_handler, admin_update_addresses_handler
+) import
     …, admin_update_prices_handler, admin_update_addresses_handler
 )
 from bot.config import BOT_TOKEN, ADMIN_USERNAME
