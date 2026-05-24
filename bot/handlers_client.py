@@ -489,91 +489,76 @@ async def handle_scan_domain(update, context):
     await update.message.reply_text("✅ Domain verified. Launching scan...")
     chat_id = update.message.chat_id
 
-    progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
-    loop = asyncio.get_running_loop()
-
-    def sync_progress(msg):
-        async def _upd():
-            try:
-                await progress_msg.edit_text(msg)
-            except:
-                pass
-        asyncio.run_coroutine_threadsafe(_upd(), loop)
+    # Determine plan and deep mode (before going async)
+    c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+    row = c.fetchone()
+    plan = row[0] if row else "free"
+    context.user_data["plan"] = plan
+    deep = (plan == "enterprise")
 
     c.execute("SELECT email_collect FROM clients WHERE username=?", (username,))
     row = c.fetchone()
     email = row[0] if row else ""
     tools = context.user_data.get("tools", None)
 
-    # Determine plan and deep mode
-    c.execute("SELECT plan FROM clients WHERE username=?", (username,))
-    row = c.fetchone()
-    plan = row[0] if row else "free"
-    context.user_data["plan"] = plan   # remember for later
-    deep = (plan == "enterprise")
+    # Save scan type for compliance logic
+    scan_type = context.user_data.get("scan_type", "full")
 
-    # Concurrency control
-    if scan_semaphore.locked():
-        await update.message.reply_text("⏳ All scan slots are busy. Your scan will start as soon as a slot is free...")
-
-    async with scan_semaphore:
+    # Launch the scan in the background – handler returns immediately
+    async def scan_task():
         try:
-            results = await asyncio.to_thread(run_scan, domain, email, sync_progress, tools, deep)
-        except Exception as e:
-            traceback.print_exc()
-            await update.message.reply_text(f"❌ Scan crashed: {e}")
-            results = None
+            async with scan_semaphore:
+                progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
+                loop = asyncio.get_running_loop()
 
-    try:
-        await progress_msg.delete()
-    except:
-        pass
+                def sync_progress(msg):
+                    async def _upd():
+                        try:
+                            await progress_msg.edit_text(msg)
+                        except:
+                            pass
+                    asyncio.run_coroutine_threadsafe(_upd(), loop)
 
-    if results:
-        # Use the plan we saved before the scan
-        plan = context.user_data.get("plan", "free")
-        detailed = plan in ("monthly", "enterprise")
+                results = await asyncio.to_thread(run_scan, domain, email, sync_progress, tools, deep)
 
-        print(f"[DEBUG] Building report for {domain}, detailed={detailed}")
-        try:
-            from bot.reports import build_report_markdown
-            show_compliance = (context.user_data.get("scan_type") == "full")
-            report_md = build_report_markdown(domain, results, detailed, deep, show_compliance)
-            # Split long reports into chunks
-            chunk_size = 3500
-            for i in range(0, len(report_md), chunk_size):
-                chunk = report_md[i:i+chunk_size]
                 try:
-                    await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="Markdown")
+                    await progress_msg.delete()
                 except:
-                    await context.bot.send_message(chat_id=chat_id, text=chunk)
-            print(f"[DEBUG] Report sent in {(len(report_md) // chunk_size) + 1} chunks")
+                    pass
+
+                if results:
+                    detailed = plan in ("monthly", "enterprise")
+                    from bot.reports import build_report_markdown
+                    show_compliance = (scan_type == "full")
+                    report_md = build_report_markdown(domain, results, detailed, deep, show_compliance)
+                    chunk_size = 3500
+                    for i in range(0, len(report_md), chunk_size):
+                        chunk = report_md[i:i+chunk_size]
+                        try:
+                            await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="Markdown")
+                        except:
+                            await context.bot.send_message(chat_id=chat_id, text=chunk)
+
+                    if plan == "free":
+                        c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
+                        conn.commit()
+
+                    if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
+                        from bot.exploit_proof import capture_xss_proof
+                        await capture_xss_proof(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
+
+                    await context.bot.send_message(chat_id=chat_id, text="🔮 What's next?",
+                                                   reply_markup=main_menu(username == ADMIN_USERNAME))
+                else:
+                    await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
-            print(f"[!] Report error: {tb}")
+            print(f"[!] Background scan error: {tb}")
             try:
-                await context.bot.send_message(
-                    chat_id=f"@{ADMIN_USERNAME}",
-                    text=f"❌ Report generation failed for {domain}\n```{tb[:500]}```"
-                )
+                await context.bot.send_message(chat_id=chat_id, text="⚠️ Scan encountered an error.")
             except:
                 pass
-            await context.bot.send_message(chat_id=chat_id, text="⚠️ Report generation failed. The admin has been notified.")
 
-        if plan == "free":
-            c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
-            conn.commit()
-
-        # Exploitation proof for enterprise
-        if plan == "enterprise" and results.get("dalfox") and "vulnerable" in results["dalfox"].lower():
-            from bot.exploit_proof import capture_xss_proof
-            await capture_xss_proof(f"http://{domain}", "<script>alert('XSS')</script>", context, chat_id)
-    else:
-        await context.bot.send_message(chat_id=chat_id, text="❌ Scan failed.")
-
-    context.user_data.pop("state", None)
-    context.user_data.pop("scan_type", None)
-    context.user_data.pop("tools", None)
-    await update.message.reply_text("🔮 What's next?", reply_markup=main_menu(username == ADMIN_USERNAME))
+    asyncio.create_task(scan_task())
     return True
