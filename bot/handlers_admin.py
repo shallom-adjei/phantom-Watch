@@ -145,7 +145,8 @@ async def handle_admin_wizard(update, context):
             return True
         target = context.user_data["add_target"]
         plan = context.user_data["add_plan"]
-        add_client(target, plan, months)
+        # Offload the actual DB write so we never block the bot
+        await asyncio.to_thread(add_client, target, plan, months)
         await update.message.reply_text(f"✅ Added @{target} with {plan} plan.", reply_markup=admin_menu())
         for k in ("add_target", "add_plan", "state"):
             context.user_data.pop(k, None)
@@ -182,8 +183,10 @@ async def handle_admin_wizard(update, context):
         if not is_client(target):
             await update.message.reply_text("User is not a client.")
             return True
-        c.execute("UPDATE clients SET expiry='2000-01-01' WHERE username=?", (target,))
-        conn.commit()
+        def _remove():
+            c.execute("UPDATE clients SET expiry='2000-01-01' WHERE username=?", (target,))
+            conn.commit()
+        await asyncio.to_thread(_remove)
         await update.message.reply_text(f"❌ User @{target} has been removed. They can no longer use the bot.", reply_markup=admin_menu())
         context.user_data.pop("state", None)
         return True
