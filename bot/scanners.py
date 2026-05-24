@@ -1,4 +1,4 @@
-"""Scan engine – full power, with all elite tools."""
+"""Scan engine – full power, with all elite tools (stable)."""
 import subprocess, os, shutil, concurrent.futures, json, random
 
 COMMON_PATHS = [
@@ -61,14 +61,12 @@ def run_subfinder_massdns(domain, progress_callback=None):
     """Passive subdomain discovery + live verification."""
     if progress_callback:
         progress_callback("🔍 Subfinder (passive) enumerating...")
-    # Step 1: Subfinder passive
     subfinder_cmd = ["subfinder", "-d", domain, "-silent"]
     sub_res = run_command(subfinder_cmd, timeout=60)
     if sub_res['stdout'].strip():
         subs = sub_res['stdout'].strip().split('\n')
     else:
         subs = [domain]
-    # Step 2: MassDNS live verification
     with open("/tmp/subs.txt", "w") as f:
         f.write("\n".join(subs))
     massdns_cmd = [
@@ -86,7 +84,6 @@ def run_subfinder_massdns(domain, progress_callback=None):
     return list(live) if live else []
 
 def run_prowler(provider, credentials=None, progress_callback=None):
-    """Run Prowler against a cloud provider."""
     if progress_callback:
         progress_callback(f"☁️ Prowler auditing {provider}...")
     cmd = ["prowler", provider, "--quiet", "--output", "json"]
@@ -100,11 +97,9 @@ def run_prowler(provider, credentials=None, progress_callback=None):
         return {"error": "Failed to parse Prowler output", "raw": res['stdout'][:500]}
 
 def run_spiderfoot(domain, progress_callback=None):
-    """Run SpiderFoot from cloned repo."""
     if progress_callback:
         progress_callback("🕸️ SpiderFoot OSINT scan...")
     cmd = ["python3", "/opt/spiderfoot/sf.py", "-s", domain, "-q", "-o", "json"]
-        base_tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"]
     res = run_command(cmd, timeout=600)
     try:
         data = json.loads(res['stdout'])
@@ -113,17 +108,18 @@ def run_spiderfoot(domain, progress_callback=None):
         return {"error": "SpiderFoot failed", "raw": res['stdout'][:300]}
 
 def run_reconspider(target, progress_callback=None):
-    """Run ReconSpider from cloned repo."""
     if progress_callback:
         progress_callback("🕷️ ReconSpider deep dive...")
     cmd = ["python3", "/opt/reconspider/reconspider.py", target]
-    ]
     res = run_command(cmd, timeout=300)
     return res['stdout']
 
 def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
     if tools is None:
-        base_tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"]
+        base_tools = [
+            "nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil",
+            "sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"
+        ]
         if deep:
             tools = base_tools + ["spiderfoot"]
         else:
@@ -134,39 +130,27 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
     # ----- Heavy tools (sequential) -----
     if "nmap" in tools:
         progress_callback("⚡ Nmap (full power)" if deep else "⚡ Nmap scanning...")
-        if deep:
-            cmd = ["nmap","-p-","-sV","-O","-T4","--script","vuln,exploit,auth,default,discovery",domain]
-            timeout = 600
-        else:
-            cmd = ["nmap","-sV","-T4","--top-ports","200",domain]
-            timeout = 180
-        res = run_command(cmd, timeout)
+        cmd = ["nmap","-p-","-sV","-O","-T4","--script","vuln,exploit,auth,default,discovery",domain] if deep else \
+              ["nmap","-sV","-T4","--top-ports","200",domain]
+        res = run_command(cmd, timeout=600 if deep else 180)
         results['nmap'] = res['stdout']
         if res['failed']: print(f"[!] Nmap failed (code {res['returncode']})")
 
     if "nikto" in tools:
         progress_callback("🕵️ Nikto (exhaustive)" if deep else "🕵️ Nikto...")
-        if deep:
-            cmd = ["nikto","-h",domain,"-T","0123456789abcde","-maxtime","600s"]
-            timeout = 600
-        else:
-            cmd = ["nikto","-h",domain,"-T","123bde","-maxtime","120s"]
-            timeout = 300
-        res = run_command(cmd, timeout)
+        cmd = ["nikto","-h",domain,"-T","0123456789abcde","-maxtime","600s"] if deep else \
+              ["nikto","-h",domain,"-T","123bde","-maxtime","120s"]
+        res = run_command(cmd, timeout=600 if deep else 300)
         results['nikto'] = res['stdout']
         if res['failed']: print(f"[!] Nikto failed (code {res['returncode']})")
 
     if "metagoofil" in tools:
         progress_callback("📄 Metagoofil (extensive)" if deep else "📄 Metagoofil...")
-        if deep:
-            cmd = ["python3","/home/runner/metagoofil/metagoofil.py","-d",domain,"-t","pdf,doc,xls","-l","30","-n","15",
-                   "-o",f"/tmp/meta_{domain}","-f",f"meta_{domain}.html"]
-            timeout = 400
-        else:
-            cmd = ["python3","/home/runner/metagoofil/metagoofil.py","-d",domain,"-t","pdf,doc,xls","-l","10","-n","5",
-                   "-o",f"/tmp/meta_{domain}","-f",f"meta_{domain}.html"]
-            timeout = 300
-        res = run_command(cmd, timeout)
+        cmd = ["python3","/home/runner/metagoofil/metagoofil.py","-d",domain,"-t","pdf,doc,xls","-l","30","-n","15",
+               "-o",f"/tmp/meta_{domain}","-f",f"meta_{domain}.html"] if deep else \
+              ["python3","/home/runner/metagoofil/metagoofil.py","-d",domain,"-t","pdf,doc,xls","-l","10","-n","5",
+               "-o",f"/tmp/meta_{domain}","-f",f"meta_{domain}.html"]
+        res = run_command(cmd, timeout=400 if deep else 300)
         meta_report = f"/tmp/meta_{domain}/meta_{domain}.html"
         if os.path.exists(meta_report):
             with open(meta_report) as f: results['metagoofil'] = f.read()
@@ -175,7 +159,10 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
             results['metagoofil'] = "No public documents with metadata found (normal for this target)."
 
     # ----- Light tools (parallel in deep mode, else sequential) -----
-    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns","spiderfoot","reconspider")]
+    light_tools = [t for t in tools if t in (
+        "whatweb","theHarvester","dnstwist","sherlock","dalfox",
+        "nuclei","subfinder","ffuf","subfinder_massdns","spiderfoot","reconspider"
+    )]
 
     if deep and light_tools:
         progress_callback(f"⚡ Running {len(light_tools)} light tools in parallel...")
