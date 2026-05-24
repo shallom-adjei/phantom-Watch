@@ -118,6 +118,19 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             lines.append(f"🌐 Subdomain Discovery: {len(subs)} live subdomains found")
         else:
             lines.append("🌐 Subdomain Discovery: No live subdomains found.")
+    if 'spiderfoot' in results:
+        data = results['spiderfoot']
+        if isinstance(data, list):
+            lines.append(f"🕸️ SpiderFoot: {len(data)} intelligence records")
+        else:
+            lines.append("🕸️ SpiderFoot: Scan completed (see detailed report)")
+
+    if 'reconspider' in results:
+        raw = results['reconspider']
+        if raw and not raw.startswith("[!]"):
+            lines.append("🕷️ ReconSpider: Investigation completed")
+        else:
+            lines.append("🕷️ ReconSpider: No findings")
 
     # Detailed paid report
     if detailed:
@@ -138,6 +151,8 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             ("🌐 Subfinder", 'subfinder'),
             ("🌀 FFUF Hidden Paths", 'ffuf'),
             ("🌐 Subdomain Discovery", 'subfinder_massdns'),
+            ("🕸️ SpiderFoot", 'spiderfoot'),
+            ("🕷️ ReconSpider", 'reconspider'),
         ]
         for label, key in tools:
             if key in results and "Error" not in str(results.get(key, "")):
