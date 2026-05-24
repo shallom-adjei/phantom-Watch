@@ -1,4 +1,4 @@
-"""Professional report – handles all elite tools."""
+f"""Professional report – handles all elite tools."""
 import re, json, traceback
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -240,7 +240,6 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             ("📄 Metagoofil", 'metagoofil'),
             ("👥 Sherlock", 'sherlock'),
             ("🦠 Dalfox", 'dalfox'),
-            ("🧬 Nuclei Findings", 'nuclei'),
             ("🌐 Subfinder", 'subfinder'),
             ("🌀 FFUF Hidden Paths", 'ffuf'),
             ("📡 Subdomain Discovery", 'subfinder_massdns'),
