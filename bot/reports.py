@@ -82,7 +82,7 @@ def compute_threat_score(results):
     # Subfinder (subdomains increase attack surface)
     if 'subfinder' in results:
         subs = results['subfinder'].strip().split('\n') if results['subfinder'].strip() else []
-        real_subs = [s for s in subs if s and not s.startswith('[') and s != domain]
+        real_subs = [s for s in subs if s and not s.startswith('[')]
         score += len(real_subs) * 2
         max_score += 20 * 2
 
