@@ -112,24 +112,18 @@ async def quick_scan_subhandler(update, context):
         tools = ["nmap", "nikto"]
     elif data == "quick_osint":
         tools = ["theHarvester", "sherlock"]
-    elif data == "quick_ffuf":
-        tools = ["ffuf"]
-    elif data == "quick_nuclei":
-        tools = ["nuclei"]
     elif data == "quick_recon":
-        tools = ["whatweb", "dnstwist", "metagoofil"]
-    elif data == "quick_xss":
-        tools = ["dalfox"]
+        tools = ["whatweb", "dnstwist", "metagoofil", "ffuf"]
+    elif data == "quick_vulnvalidation":
+        tools = ["dalfox", "nuclei"]
     elif data == "quick_subfinder_massdns":
         tools = ["subfinder_massdns"]
     elif data == "quick_gitleaks":
-        # Gitleaks requires a GitHub URL – set state and return immediately
         context.user_data["state"] = "GITHUB_SCAN"
         await query.edit_message_text("🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):")
         return
 
     if tools is None:
-        # fallback – should never happen
         tools = []
 
     context.user_data["state"] = "SCAN_DOMAIN"

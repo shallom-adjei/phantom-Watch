@@ -32,11 +32,9 @@ def admin_menu():
 def quick_scan_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🛡️ Ports & Vulns", callback_data="quick_ports"),
-         InlineKeyboardButton("🌐 OSINT Pack", callback_data="quick_osint")],
-        [InlineKeyboardButton("🔎 Recon", callback_data="quick_recon"),
-         InlineKeyboardButton("🦠 XSS Check", callback_data="quick_xss")],
-        [InlineKeyboardButton("🌐 Subdomain Discovery", callback_data="quick_subfinder_massdns")],
-        [InlineKeyboardButton("🧬 Nuclei Scan", callback_data="quick_nuclei")],
-        [InlineKeyboardButton("🌀 FFUF Directory Fuzzing", callback_data="quick_ffuf")],
+         InlineKeyboardButton("🌐 OSINT & Social", callback_data="quick_osint")],
+        [InlineKeyboardButton("🔎 Web Recon", callback_data="quick_recon"),
+         InlineKeyboardButton("🦠 Vuln Validation", callback_data="quick_vulnvalidation")],
+        [InlineKeyboardButton("📡 Subdomain Discovery", callback_data="quick_subfinder_massdns")],
         [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ])
