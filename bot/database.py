@@ -1,11 +1,23 @@
+"""Database helpers – uses Turso cloud DB for persistence."""
+import os
 import sqlite3
 from datetime import datetime, timedelta
 
-DB_FILE = "phantom_clients.db"
-conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+# Connect to Turso using the experimental client
+DB_URL = os.getenv("TURSO_DB_URL")
+AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
+
+if DB_URL and AUTH_TOKEN:
+    import libsql_experimental
+    conn = libsql_experimental.connect(DB_URL, auth_token=AUTH_TOKEN)
+else:
+    # Fallback for local testing
+    conn = sqlite3.connect("phantom_clients.db")
+
+conn.row_factory = sqlite3.Row
 c = conn.cursor()
 
-# Create tables
+# Create tables if they don't exist
 c.execute("""CREATE TABLE IF NOT EXISTS clients (
     username TEXT PRIMARY KEY,
     plan TEXT DEFAULT 'free',
@@ -22,6 +34,16 @@ c.execute("""CREATE TABLE IF NOT EXISTS subscriptions (
     last_scan_time TEXT, last_report_json TEXT,
     PRIMARY KEY(username, domain)
 )""")
+c.execute("""CREATE TABLE IF NOT EXISTS client_tech (
+    username TEXT, domain TEXT, tech TEXT,
+    last_check TEXT,
+    PRIMARY KEY(username, domain, tech)
+)""")
+c.execute("""CREATE TABLE IF NOT EXISTS scan_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT, domain TEXT, timestamp TEXT,
+    report TEXT, finished INTEGER DEFAULT 0
+)""")
 conn.commit()
 
 def is_client(username: str) -> bool:
@@ -33,7 +55,7 @@ def is_active(username: str) -> bool:
     row = c.fetchone()
     if not row:
         return False
-    plan, expiry, scan_used = row
+    plan, expiry, scan_used = row["plan"], row["expiry"], row["scan_used"]
     if plan == "free":
         if scan_used:
             return False

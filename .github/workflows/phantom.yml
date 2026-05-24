@@ -32,6 +32,8 @@ jobs:
       - name: Install Python tools
         run: |
           sudo pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog
+          sudo pip3 install --break-system-packages theharvester dnstwist "python-telegram-bot[job-queue]" fpdf2 requests playwright trufflehog libsql-experimental
+
 
       - name: Install Playwright browsers
         run: |
@@ -91,6 +93,8 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           HIBP_API_KEY: ${{ secrets.HIBP_API_KEY }}
+          TURSO_DB_URL: ${{ secrets.TURSO_DB_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
         run: python3 -m bot.main
 
       # Save database for next run
