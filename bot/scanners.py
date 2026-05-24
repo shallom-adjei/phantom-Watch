@@ -103,11 +103,7 @@ def run_spiderfoot(domain, progress_callback=None):
     """Run SpiderFoot from cloned repo."""
     if progress_callback:
         progress_callback("🕸️ SpiderFoot OSINT scan...")
-    cmd = [
-        "python3", "/opt/spiderfoot/sf.py",
-        "-s", domain,
-        "-q",
-        "-o", "json"
+    cmd = ["python3", "/opt/spiderfoot/sf.py", "-s", domain, "-q", "-o", "json"]
     ]
     res = run_command(cmd, timeout=600)
     try:
@@ -120,9 +116,7 @@ def run_reconspider(target, progress_callback=None):
     """Run ReconSpider from cloned repo."""
     if progress_callback:
         progress_callback("🕷️ ReconSpider deep dive...")
-    cmd = [
-        "python3", "/opt/reconspider/reconspider.py",
-        target
+    cmd = ["python3", "/opt/reconspider/reconspider.py", target]
     ]
     res = run_command(cmd, timeout=300)
     return res['stdout']

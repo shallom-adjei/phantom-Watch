@@ -72,18 +72,24 @@ jobs:
           cd /tmp/massdns && make -j$(nproc) && sudo cp bin/massdns /usr/local/bin/
           wget -q https://raw.githubusercontent.com/blechschmidt/massdns/master/lists/resolvers.txt -O /tmp/resolvers.txt
 
-      - name: Install Prowler (PyPI)
+      - name: Install Prowler (PyPI)   # this one is fine on PyPI
         run: |
           pip3 install --break-system-packages prowler
 
-      - name: Install SpiderFoot (PyPI)
+      - name: Install SpiderFoot (source)
         run: |
-          pip3 install --break-system-packages spiderfoot
+          git clone --depth 1 https://github.com/smicallef/spiderfoot.git /opt/spiderfoot
+          cd /opt/spiderfoot
+          # Install core dependencies – ignore optional ones that may fail
+          pip3 install --break-system-packages -r requirements.txt || true
+          pip3 install --break-system-packages lxml netaddr requests dnspython beautifulsoup4
 
-      - name: Install ReconSpider (PyPI)
+      - name: Install ReconSpider (source)
         run: |
-          pip3 install --break-system-packages reconspider
-
+          git clone --depth 1 https://github.com/bhavsec/reconspider.git /opt/reconspider
+          cd /opt/reconspider
+          # ReconSpider doesn't have requirements.txt – install known dependencies
+          pip3 install --break-system-packages requests beautifulsoup4 lxml
 
       - name: Run Phantom Watch
         env:
