@@ -9,23 +9,11 @@ from bot.handlers_client import (
 from bot.handlers_admin import (
     admin_menu_handler, admin_adduser_handler, admin_verify_handler,
     admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
-    admin_update_prices_handler, admin_update_addresses_handler
-) import
-    admin_menu_handler, admin_adduser_handler, admin_verify_handler,
-    admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
-)
-from bot.handlers_admin import (
-    admin_menu_handler, admin_adduser_handler, admin_verify_handler,
-    admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
-    admin_update_prices_handler, admin_update_addresses_handler
-) import
-    …, admin_update_prices_handler, admin_update_addresses_handler
+    admin_update_prices_handler, admin_update_addresses_handler,
 )
 from bot.config import BOT_TOKEN, ADMIN_USERNAME
 from bot.menus import main_menu
-import asyncio
-import traceback
-import os
+import asyncio, os, traceback, aiohttp
 
 CALLBACK_ROUTES = {
     "main_menu": main_menu_handler,
@@ -39,6 +27,7 @@ CALLBACK_ROUTES = {
     "github_scan": github_scan_handler,
     "help": help_handler,
     "contact_admin": contact_admin_handler,
+    "upgrade": upgrade_handler,
     "admin_menu": admin_menu_handler,
     "admin_adduser": admin_adduser_handler,
     "admin_verify": admin_verify_handler,
@@ -46,7 +35,6 @@ CALLBACK_ROUTES = {
     "admin_removeuser": admin_removeuser_handler,
     "admin_update_prices": admin_update_prices_handler,
     "admin_update_addresses": admin_update_addresses_handler,
-    "upgrade": upgrade_handler,
 }
 
 async def button_router(update, context):
@@ -63,7 +51,7 @@ async def button_router(update, context):
             traceback.print_exc()
 
 async def message_router(update, context):
-    await asyncio.sleep(0)
+    await asyncio.sleep(0)   # yield control so other messages can be processed
     username = update.message.from_user.username
     text = update.message.text.strip()
     state = context.user_data.get("state")
@@ -71,7 +59,8 @@ async def message_router(update, context):
 
     # Admin wizards
     if state in ("ADDUSER_USERNAME", "ADDUSER_PLAN", "ADDUSER_MONTHS",
-                 "VERIFY_USERNAME", "VERIFY_DOMAIN", "REMOVE_USER"):
+                 "VERIFY_USERNAME", "VERIFY_DOMAIN", "REMOVE_USER",
+                 "UPDATE_PRICES", "UPDATE_ADDRESSES"):
         try:
             handled = await handle_admin_wizard(update, context)
             if handled:
@@ -117,18 +106,6 @@ async def message_router(update, context):
     except Exception as e:
         print(f"Fallback error: {e}")
 
-async def background_tasks(app):
-    """Start subscription checks and CVE monitor."""
-    while True:
-        try:
-            from bot.scheduler import check_subscriptions, cve_monitor
-            await check_subscriptions(app.bot)
-            await cve_monitor(app.bot, ADMIN_USERNAME)
-        except Exception as e:
-            print(f"Background task error: {e}")
-        await asyncio.sleep(3600)  # run every hour
-import aiohttp
-
 async def auto_restart():
     """Trigger a new workflow run 5 minutes before timeout (50 minutes)."""
     await asyncio.sleep(3000)  # 50 minutes
@@ -150,18 +127,29 @@ async def auto_restart():
             else:
                 print(f"[!] Auto-restart failed: {resp.status}")
 
+async def background_tasks(app):
+    """Start subscription checks and CVE monitor."""
+    while True:
+        try:
+            from bot.scheduler import check_subscriptions, cve_monitor
+            await check_subscriptions(app.bot)
+            await cve_monitor(app.bot, ADMIN_USERNAME)
+        except Exception as e:
+            print(f"Background task error: {e}")
+        await asyncio.sleep(3600)  # run every hour
+
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CallbackQueryHandler(button_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_router))
 
-    # Start background tasks
+    # Start background tasks and auto-restart
     loop = asyncio.get_event_loop()
     loop.create_task(background_tasks(app))
+    loop.create_task(auto_restart())
 
     print("👻 Phantom Watch is watching...")
-    loop.create_task(auto_restart())
     app.run_polling()
 
 if __name__ == "__main__":
