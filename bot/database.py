@@ -1,8 +1,6 @@
 """Database helpers – uses Turso cloud DB for persistence."""
 import os
 import sqlite3
-import threading
-db_lock = threading.Lock()
 from datetime import datetime, timedelta
 
 DB_URL = os.getenv("TURSO_DB_URL")
@@ -43,17 +41,13 @@ c.execute("""CREATE TABLE IF NOT EXISTS scan_results (
     username TEXT, domain TEXT, timestamp TEXT,
     report TEXT, finished INTEGER DEFAULT 0
 )""")
-        with db_lock:
-        conn.commit()
 c.execute("""CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
 )""")
-# Insert defaults if not exist
 c.execute("INSERT OR IGNORE INTO settings VALUES ('crypto_addresses', '{\"BTC\":\"\",\"ETH\":\"\",\"USDT\":\"\"}')")
 c.execute("INSERT OR IGNORE INTO settings VALUES ('plan_prices', '{\"monthly\":\"$199\",\"enterprise\":\"$2,000\"}')")
-    with db_lock:
-        conn.commit()
+conn.commit()
 
 def is_client(username: str) -> bool:
     c.execute("SELECT 1 FROM clients WHERE username=?", (username,))
@@ -64,7 +58,6 @@ def is_active(username: str) -> bool:
     row = c.fetchone()
     if not row:
         return False
-    # Access columns by index (0=plan, 1=expiry, 2=scan_used)
     plan, expiry, scan_used = row[0], row[1], row[2]
     if plan == "free":
         if scan_used:
@@ -83,8 +76,7 @@ def add_client(username: str, plan: str = "free", months: int = 0):
     elif months > 0:
         expiry = (datetime.now() + timedelta(days=30 * months)).strftime("%Y-%m-%d")
     c.execute("INSERT OR REPLACE INTO clients VALUES (?,?,?,?,?)", (username, plan, expiry, "", 0))
-    with db_lock:
-        conn.commit()
+    conn.commit()
 
 def generate_token() -> str:
     import random, string
