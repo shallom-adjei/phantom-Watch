@@ -79,7 +79,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
         lines.append(f"🔥 Nikto: {issues} web issues")
     if 'whatweb' in results:
         clean = re.sub(r"\x1b\[[0-9;]*m", "", results.get("whatweb",""))
-        servers = re.findall(r"HTTPServer\[ (.*?) \]", clean)
+        servers = re.findall(r"HTTPServer\[(.*?)\]", clean)
         lines.append(f"🧩 Technology: {servers[0] if servers else 'No server header'}")
     if 'theHarvester' in results:
         harvest = results["theHarvester"]
@@ -89,7 +89,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             lines.append(f"📧 theHarvester: {len(emails)} leaked emails found")
     if 'dnstwist' in results:
         registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get("dnstwist",""), re.MULTILINE))
-        lines.append(f"🕵️ dnstwist: {registered} typosquatting domains registered")
+        lines.append(f"🕵️ dnstwist: {registered} typosquatting domains registered (other permutations not live)")
     if 'metagoofil' in results:
         if "No metadata" in results.get("metagoofil",""): lines.append("📄 Metagoofil: No metadata leaks")
         else: lines.append("📄 Metagoofil: Metadata leaks found")
@@ -166,8 +166,17 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
         for label, key in tools:
             if key in results and "Error" not in str(results.get(key, "")):
                 raw = results[key]
-                # Convert dict/list to string for display
-                if isinstance(raw, (dict, list)):
+
+                # Tool‑specific filtering
+                if key == "dnstwist":
+                    lines_raw = raw.strip().split('\n')
+                    registered = [l for l in lines_raw if "registered" in l]
+                    snippet = "\n".join(registered[:15]) if registered else "No typosquatting domains registered."
+                elif key == "subfinder":
+                    lines_raw = raw.strip().split('\n')
+                    real_subs = [l for l in lines_raw if l and not l.startswith('[') and l != domain]
+                    snippet = "\n".join(real_subs[:15]) if real_subs else "No live subdomains found."
+                elif isinstance(raw, (dict, list)):
                     snippet = json.dumps(raw, indent=2)[:500]
                 else:
                     snippet = clean_ansi(str(raw))[:300] if raw else "No findings."
