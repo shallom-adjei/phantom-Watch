@@ -3,7 +3,6 @@ import os
 import sqlite3
 from datetime import datetime, timedelta
 
-# Connect to Turso using the experimental client
 DB_URL = os.getenv("TURSO_DB_URL")
 AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 
@@ -11,10 +10,8 @@ if DB_URL and AUTH_TOKEN:
     import libsql_experimental
     conn = libsql_experimental.connect(DB_URL, auth_token=AUTH_TOKEN)
 else:
-    # Fallback for local testing
     conn = sqlite3.connect("phantom_clients.db")
 
-conn.row_factory = sqlite3.Row
 c = conn.cursor()
 
 # Create tables if they don't exist
@@ -55,7 +52,8 @@ def is_active(username: str) -> bool:
     row = c.fetchone()
     if not row:
         return False
-    plan, expiry, scan_used = row["plan"], row["expiry"], row["scan_used"]
+    # Access columns by index (0=plan, 1=expiry, 2=scan_used)
+    plan, expiry, scan_used = row[0], row[1], row[2]
     if plan == "free":
         if scan_used:
             return False
