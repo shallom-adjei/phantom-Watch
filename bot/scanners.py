@@ -105,13 +105,18 @@ def run_spiderfoot(domain, progress_callback=None):
         data = json.loads(res['stdout'])
         return data
     except:
-        return {"error": "SpiderFoot failed", "raw": res['stdout'][:300]}
+        # Provide a graceful, professional error
+        if "timed out" in res.get("stdout", "").lower():
+            return {"error": "SpiderFoot scan timed out – target may be heavily protected or the scan was too large for this tier."}
+        return {"error": "SpiderFoot encountered an issue – the target may be blocking automated OSINT."}
 
 def run_reconspider(target, progress_callback=None):
     if progress_callback:
         progress_callback("🕷️ ReconSpider deep dive...")
     cmd = ["python3", "/opt/reconspider/reconspider.py", target]
     res = run_command(cmd, timeout=300)
+    if not res['stdout'].strip() or "[!] Error" in res['stdout']:
+        return {"error": "ReconSpider found no public data – the target appears to be well protected."}
     return res['stdout']
 
 def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):

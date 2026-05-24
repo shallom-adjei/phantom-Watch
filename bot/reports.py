@@ -1,4 +1,4 @@
-f"""Professional report – handles all elite tools."""
+"""Professional report – handles all elite tools."""
 import re, json, traceback
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
@@ -269,6 +269,8 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                 lines.append("```")
                 lines.append(safe)
                 lines.append("```")
+                if key in ("spiderfoot", "reconspider") and isinstance(raw, dict) and "error" in raw:
+                    snippet = raw["error"]
         # Nuclei explicit block (always show if run)
         if 'nuclei' in results:
             nuclei_out = results['nuclei']
