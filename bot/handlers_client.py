@@ -466,14 +466,6 @@ async def handle_scan_domain(update, context):
     if not is_active(username):
         await update.message.reply_text("⛔ Not authorized or trial expired.")
         return True
-    if scan_semaphore.locked():
-        await update.message.reply_text("⏳ All scan slots are currently busy. Your scan will start as soon as a slot is free...")
-
-    async with scan_semaphore:
-        try:
-        results = await asyncio.to_thread(run_scan, domain, email, sync_progress, tools, deep)
-        except Exception as e:
-            ...
 
     # Verification
     if username != ADMIN_USERNAME:
@@ -513,25 +505,32 @@ async def handle_scan_domain(update, context):
     email = row[0] if row else ""
     tools = context.user_data.get("tools", None)
 
-    # Determine if this is a deep scan (enterprise users)
+    # Determine plan and deep mode
     c.execute("SELECT plan FROM clients WHERE username=?", (username,))
     row = c.fetchone()
     plan = row[0] if row else "free"
     context.user_data["plan"] = plan   # remember for later
     deep = (plan == "enterprise")
 
-    try:
-        results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools, deep)
-    except Exception as e:
-        traceback.print_exc()
-        await update.message.reply_text(f"❌ Scan crashed: {e}")
-        results = None
+    # Concurrency control
+    if scan_semaphore.locked():
+        await update.message.reply_text("⏳ All scan slots are busy. Your scan will start as soon as a slot is free...")
+
+    async with scan_semaphore:
+        try:
+            results = await asyncio.to_thread(run_scan, domain, email, sync_progress, tools, deep)
+        except Exception as e:
+            traceback.print_exc()
+            await update.message.reply_text(f"❌ Scan crashed: {e}")
+            results = None
+
     try:
         await progress_msg.delete()
     except:
         pass
+
     if results:
-        # Use the plan we saved before the scan (more reliable)
+        # Use the plan we saved before the scan
         plan = context.user_data.get("plan", "free")
         detailed = plan in ("monthly", "enterprise")
 
@@ -551,11 +550,16 @@ async def handle_scan_domain(update, context):
             print(f"[DEBUG] Report sent in {(len(report_md) // chunk_size) + 1} chunks")
         except Exception as e:
             import traceback
-            traceback.print_exc()
+            tb = traceback.format_exc()
+            print(f"[!] Report error: {tb}")
             try:
-                await context.bot.send_message(chat_id=chat_id, text="⚠️ Report generation failed. Please contact admin.")
+                await context.bot.send_message(
+                    chat_id=f"@{ADMIN_USERNAME}",
+                    text=f"❌ Report generation failed for {domain}\n```{tb[:500]}```"
+                )
             except:
                 pass
+            await context.bot.send_message(chat_id=chat_id, text="⚠️ Report generation failed. The admin has been notified.")
 
         if plan == "free":
             c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
