@@ -36,13 +36,26 @@ def run_subfinder(domain, progress_callback=None):
     return []
 
 def run_amass(domain, progress_callback=None):
-    """Enumerate subdomains using Amass (active + passive)."""
+    """Safe passive Amass enumeration – fast, stable, low-noise."""
     if progress_callback:
-        progress_callback("🔍 Amass enumerating subdomains...")
-    cmd = ["/usr/local/bin/amass", "enum", "-passive", "-d", domain, "-silent", "-timeout", "120"]
+        progress_callback("🔍 Amass (passive) enumerating subdomains...")
+    # Use full path to binary and the recommended passive flags
+    cmd = [
+        "/usr/local/bin/amass",
+        "enum",
+        "-passive",
+        "-norecursive",
+        "-noalts",
+        "-timeout", "10",
+        "-d", domain,
+        "-o", "/dev/stdout"   # explicitly write to stdout
+    ]
     res = run_command(cmd, timeout=180)
     if res['stdout'].strip():
-        return res['stdout'].strip().split('\n')
+        # Filter out comment lines and empty entries
+        subdomains = [line.strip() for line in res['stdout'].split('\n')
+                      if line.strip() and not line.startswith("[")]
+        return subdomains
     return []
 
 def run_massdns(subs, progress_callback=None):
