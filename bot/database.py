@@ -43,7 +43,7 @@ c.execute("""CREATE TABLE IF NOT EXISTS scan_results (
     username TEXT, domain TEXT, timestamp TEXT,
     report TEXT, finished INTEGER DEFAULT 0
 )""")
-    with db_lock:
+        with db_lock:
         conn.commit()
 c.execute("""CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
