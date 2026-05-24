@@ -1,5 +1,5 @@
-"""Professional report with safe code blocks."""
-import re
+"""Professional report – handles all elite tools."""
+import re, json, traceback
 from datetime import datetime
 from bot.config import ADMIN_USERNAME
 
@@ -114,23 +114,31 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
         else: lines.append("🌀 FFUF: No hidden paths found.")
     if 'subfinder_massdns' in results:
         subs = results['subfinder_massdns'].strip().split('\n') if results['subfinder_massdns'].strip() else []
-        if subs:
-            lines.append(f"🌐 Subdomain Discovery: {len(subs)} live subdomains found")
-        else:
-            lines.append("🌐 Subdomain Discovery: No live subdomains found.")
+        if subs: lines.append(f"📡 Subdomain Discovery: {len(subs)} live subdomains")
+        else: lines.append("📡 Subdomain Discovery: No live subdomains.")
     if 'spiderfoot' in results:
-        data = results['spiderfoot']
-        if isinstance(data, list):
-            lines.append(f"🕸️ SpiderFoot: {len(data)} intelligence records")
+        sf = results['spiderfoot']
+        if isinstance(sf, list):
+            lines.append(f"🕸️ SpiderFoot: {len(sf)} intelligence records")
+        elif isinstance(sf, dict) and 'error' in sf:
+            lines.append(f"🕸️ SpiderFoot: {sf['error']}")
         else:
             lines.append("🕸️ SpiderFoot: Scan completed (see detailed report)")
-
     if 'reconspider' in results:
         raw = results['reconspider']
         if raw and not raw.startswith("[!]"):
             lines.append("🕷️ ReconSpider: Investigation completed")
         else:
             lines.append("🕷️ ReconSpider: No findings")
+    if 'prowler' in results:
+        prow = results['prowler']
+        if isinstance(prow, list):
+            failed = sum(1 for f in prow if f.get('Status') == 'FAIL')
+            lines.append(f"☁️ Prowler: {failed}/{len(prow)} checks failed")
+        elif isinstance(prow, dict) and 'error' in prow:
+            lines.append(f"☁️ Prowler: {prow['error']}")
+        else:
+            lines.append("☁️ Prowler: Audit completed (see detailed report)")
 
     # Detailed paid report
     if detailed:
@@ -150,55 +158,24 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             ("🦠 Dalfox", 'dalfox'),
             ("🌐 Subfinder", 'subfinder'),
             ("🌀 FFUF Hidden Paths", 'ffuf'),
-            ("🌐 Subdomain Discovery", 'subfinder_massdns'),
+            ("📡 Subdomain Discovery", 'subfinder_massdns'),
             ("🕸️ SpiderFoot", 'spiderfoot'),
             ("🕷️ ReconSpider", 'reconspider'),
+            ("☁️ Prowler", 'prowler'),
         ]
         for label, key in tools:
             if key in results and "Error" not in str(results.get(key, "")):
-                raw = clean_ansi(results[key]) if results[key] else ""
-                if key == "theHarvester" and raw in ("No email", "No results"):
-                    continue
-                if key == "subfinder":
-                    lines_raw = raw.strip().split('\n')
-                    real_subs = [l for l in lines_raw if l and not l.startswith('[') and l != domain]
-                    snippet = "\n".join(real_subs[:15]) if real_subs else "No live subdomains found."
+                raw = results[key]
+                # Convert dict/list to string for display
+                if isinstance(raw, (dict, list)):
+                    snippet = json.dumps(raw, indent=2)[:500]
                 else:
-                    safe = raw.replace("```", "'''")
-                    snippet = safe[:300] if safe.strip() else "No findings."
+                    snippet = clean_ansi(str(raw))[:300] if raw else "No findings."
+                safe = snippet.replace("```", "'''")
                 lines.append(label)
-                lines.append(safe_code_block(snippet))
-
-        # Nuclei block (only if run)
-        if 'nuclei' in results:
-            nuclei_out = results['nuclei']
-            if not nuclei_out or "Error" in nuclei_out:
-                nuclei_text = "No vulnerabilities detected – target may be behind Cloudflare/WAF (403 Forbidden) or no issues found."
-            else:
-                nuclei_text = clean_ansi(nuclei_out).replace("```", "'''")[:500]
-            lines.append("🧬 Nuclei Findings")
-            lines.append(safe_code_block(nuclei_text))
-
-        # SpiderFoot explicit block (always show if run)
-        if 'spiderfoot' in results:
-            data = results['spiderfoot']
-            if isinstance(data, dict) and 'error' in data:
-                snippet = f"SpiderFoot error: {data['error']}"
-            else:
-                snippet = json.dumps(data, indent=2)[:500] if data else "No findings."
-            lines.append("🕸️ SpiderFoot")
-            lines.append("```")
-            lines.append(snippet)
-            lines.append("```")
-
-        # ReconSpider explicit block
-        if 'reconspider' in results:
-            raw = results['reconspider']
-            snippet = raw[:500] if raw else "No findings."
-            lines.append("🕷️ ReconSpider")
-            lines.append("```")
-            lines.append(snippet)
-            lines.append("```")
+                lines.append("```")
+                lines.append(safe)
+                lines.append("```")
 
         # Compliance table (only for full scans)
         if show_compliance:
