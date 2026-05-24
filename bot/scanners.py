@@ -1,4 +1,4 @@
-"""Scan engine – full power, with combined Subfinder+MassDNS."""
+"""Scan engine – full power, with all elite tools."""
 import subprocess, os, shutil, concurrent.futures, json, random
 
 COMMON_PATHS = [
@@ -85,9 +85,52 @@ def run_subfinder_massdns(domain, progress_callback=None):
         progress_callback(f"✅ {len(live)} live subdomains verified.")
     return list(live) if live else []
 
+def run_prowler(provider, credentials=None, progress_callback=None):
+    """Run Prowler against a cloud provider."""
+    if progress_callback:
+        progress_callback(f"☁️ Prowler auditing {provider}...")
+    cmd = ["prowler", provider, "--quiet", "--output", "json"]
+    if credentials:
+        cmd += ["--credentials-file", credentials]
+    res = run_command(cmd, timeout=600)
+    try:
+        findings = json.loads(res['stdout'])
+        return findings
+    except:
+        return {"error": "Failed to parse Prowler output", "raw": res['stdout'][:500]}
+
+def run_spiderfoot(domain, progress_callback=None):
+    """Run SpiderFoot CLI scan on a domain."""
+    if progress_callback:
+        progress_callback("🕸️ SpiderFoot OSINT scan...")
+    cmd = [
+        "spiderfoot",
+        "-s", domain,
+        "-q",
+        "-o", "json"
+    ]
+    res = run_command(cmd, timeout=600)
+    try:
+        data = json.loads(res['stdout'])
+        return data
+    except:
+        return {"error": "SpiderFoot failed", "raw": res['stdout'][:300]}
+
+def run_reconspider(target, progress_callback=None):
+    """Run ReconSpider deep investigation."""
+    if progress_callback:
+        progress_callback("🕷️ ReconSpider deep dive...")
+    cmd = ["reconspider", target]
+    res = run_command(cmd, timeout=300)
+    return res['stdout']
+
 def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
     if tools is None:
-        tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"]
+        base_tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"]
+        if deep:
+            tools = base_tools + ["spiderfoot"]
+        else:
+            tools = base_tools
 
     results = {}
 
@@ -135,7 +178,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
             results['metagoofil'] = "No public documents with metadata found (normal for this target)."
 
     # ----- Light tools (parallel in deep mode, else sequential) -----
-    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns")]
+    light_tools = [t for t in tools if t in ("whatweb","theHarvester","dnstwist","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns","spiderfoot","reconspider")]
 
     if deep and light_tools:
         progress_callback(f"⚡ Running {len(light_tools)} light tools in parallel...")
@@ -165,6 +208,10 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 return ("ffuf", run_ffuf(domain))
             elif tool == "subfinder_massdns":
                 return ("subfinder_massdns", "\n".join(run_subfinder_massdns(domain)))
+            elif tool == "spiderfoot":
+                return ("spiderfoot", run_spiderfoot(domain))
+            elif tool == "reconspider":
+                return ("reconspider", run_reconspider(domain))
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = {executor.submit(run_light, t): t for t in light_tools}
@@ -202,5 +249,9 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False):
                 results['ffuf'] = run_ffuf(domain)
             elif tool == "subfinder_massdns":
                 results['subfinder_massdns'] = "\n".join(run_subfinder_massdns(domain))
+            elif tool == "spiderfoot":
+                results['spiderfoot'] = run_spiderfoot(domain)
+            elif tool == "reconspider":
+                results['reconspider'] = run_reconspider(domain)
 
     return results

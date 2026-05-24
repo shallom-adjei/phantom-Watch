@@ -36,5 +36,6 @@ def quick_scan_menu():
         [InlineKeyboardButton("🔎 Web Recon", callback_data="quick_recon"),
          InlineKeyboardButton("🦠 Vuln Validation", callback_data="quick_vulnvalidation")],
         [InlineKeyboardButton("📡 Subdomain Discovery", callback_data="quick_subfinder_massdns")],
+        [InlineKeyboardButton("🕵️ Deep Investigation", callback_data="quick_deepinvestigation")],
         [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ])

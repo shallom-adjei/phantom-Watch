@@ -118,6 +118,8 @@ async def quick_scan_subhandler(update, context):
         tools = ["dalfox", "nuclei"]
     elif data == "quick_subfinder_massdns":
         tools = ["subfinder_massdns"]
+    elif data == "quick_deepinvestigation":
+        tools = ["spiderfoot", "reconspider"]
     elif data == "quick_gitleaks":
         context.user_data["state"] = "GITHUB_SCAN"
         await query.edit_message_text("🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):")
