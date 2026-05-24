@@ -15,35 +15,119 @@ COMPLIANCE = {
 }
 
 def compute_threat_score(results):
-    score = 0; max_score = 0
+    score = 0
+    max_score = 0
+
+    # Nmap
     if 'nmap' in results:
         open_ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get('nmap',''), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get('nmap','')))
-        score += (open_ports * 5) + (vulns * 15); max_score += (10 * 5) + (10 * 15)
+        score += (open_ports * 5) + (vulns * 15)
+        max_score += (10 * 5) + (10 * 15)
+
+    # Nikto
     if 'nikto' in results:
         issues = len(re.findall(r"\+ (.*)", results.get('nikto','')))
-        score += issues * 10; max_score += 10 * 10
+        score += issues * 10
+        max_score += 10 * 10
+
+    # theHarvester
     if 'theHarvester' in results and results['theHarvester'] != "No email":
         harvest = results['theHarvester']
         if "<html" in harvest.lower():
             emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", harvest)
-            score += len(emails) * 10; max_score += 20 * 10
+            score += len(emails) * 10
+            max_score += 20 * 10
+
+    # dnstwist
     if 'dnstwist' in results:
         registered = len(re.findall(r"^([^ ]+)\s+registered.*", results.get('dnstwist',''), re.MULTILINE))
-        score += registered * 10; max_score += 10 * 10
+        score += registered * 10
+        max_score += 10 * 10
+
+    # Metagoofil
     if 'metagoofil' in results and "No metadata" not in results.get('metagoofil',''):
-        score += 25; max_score += 25
+        score += 25
+        max_score += 25
+
+    # Sherlock
     if 'sherlock' in results:
         found = len(re.findall(r"\[\+\] (.*)", results.get('sherlock','')))
-        score += found * 5; max_score += 20 * 5
+        score += found * 5
+        max_score += 20 * 5
+
+    # Dalfox
     if 'dalfox' in results and "vulnerable" in results.get('dalfox','').lower():
-        score += 50; max_score += 50
-    if max_score == 0: return 0, "LOW"
+        score += 50
+        max_score += 50
+
+    # Nuclei (count distinct findings)
+    if 'nuclei' in results and results['nuclei']:
+        try:
+            nuclei_data = json.loads(results['nuclei']) if isinstance(results['nuclei'], str) else results['nuclei']
+            if isinstance(nuclei_data, list):
+                nuclei_count = len(nuclei_data)
+                score += nuclei_count * 20
+                max_score += 10 * 20
+        except:
+            pass
+
+    # FFUF (each hidden path is a mild risk)
+    if 'ffuf' in results:
+        paths = results['ffuf'].strip().split('\n') if results['ffuf'].strip() else []
+        if paths:
+            score += len(paths) * 3
+            max_score += 50 * 3
+
+    # Subfinder (subdomains increase attack surface)
+    if 'subfinder' in results:
+        subs = results['subfinder'].strip().split('\n') if results['subfinder'].strip() else []
+        real_subs = [s for s in subs if s and not s.startswith('[') and s != domain]
+        score += len(real_subs) * 2
+        max_score += 20 * 2
+
+    # Subfinder + MassDNS
+    if 'subfinder_massdns' in results:
+        subs = results['subfinder_massdns'].strip().split('\n') if results['subfinder_massdns'].strip() else []
+        score += len(subs) * 2
+        max_score += 20 * 2
+
+    # SpiderFoot (OSINT intelligence records)
+    if 'spiderfoot' in results:
+        sf = results['spiderfoot']
+        if isinstance(sf, list):
+            score += len(sf) * 3
+            max_score += 50 * 3
+
+    # ReconSpider (raw findings)
+    if 'reconspider' in results and results['reconspider']:
+        raw = results['reconspider']
+        if raw and not raw.startswith("[!]"):
+            lines_found = len(raw.split('\n'))
+            score += lines_found * 2
+            max_score += 100 * 2
+
+    # Prowler (failed cloud checks are serious)
+    if 'prowler' in results:
+        prow = results['prowler']
+        if isinstance(prow, list):
+            failed = sum(1 for f in prow if f.get('Status') == 'FAIL')
+            score += failed * 15
+            max_score += 20 * 15
+
+    if max_score == 0:
+        return 0, "LOW"
+
     percent = min(100, int((score / max_score) * 100))
-    if percent < 20: level = "LOW"
-    elif percent < 50: level = "MEDIUM"
-    elif percent < 80: level = "HIGH"
-    else: level = "CRITICAL"
+    if percent < 20:
+        level = "LOW"
+    elif percent < 50:
+        level = "MEDIUM"
+    elif percent < 80:
+        level = "HIGH"
+    else:
+        level = "CRITICAL"
+
     return percent, level
 
 def clean_ansi(text):
@@ -156,6 +240,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             ("📄 Metagoofil", 'metagoofil'),
             ("👥 Sherlock", 'sherlock'),
             ("🦠 Dalfox", 'dalfox'),
+            ("🧬 Nuclei Findings", 'nuclei'),
             ("🌐 Subfinder", 'subfinder'),
             ("🌀 FFUF Hidden Paths", 'ffuf'),
             ("📡 Subdomain Discovery", 'subfinder_massdns'),
@@ -185,6 +270,17 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                 lines.append("```")
                 lines.append(safe)
                 lines.append("```")
+        # Nuclei explicit block (always show if run)
+        if 'nuclei' in results:
+            nuclei_out = results['nuclei']
+            if not nuclei_out or "Error" in nuclei_out:
+                nuclei_text = "No vulnerabilities detected – target may be behind Cloudflare/WAF (403 Forbidden) or no issues found."
+            else:
+                nuclei_text = clean_ansi(nuclei_out).replace("```", "'''")[:500]
+            lines.append("🧬 Nuclei Findings")
+            lines.append("```")
+            lines.append(nuclei_text)
+            lines.append("```")
 
         # Compliance table (only for full scans)
         if show_compliance:
