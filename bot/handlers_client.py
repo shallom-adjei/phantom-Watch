@@ -362,6 +362,43 @@ async def upgrade_handler(update, context):
     await context.bot.send_message(chat_id=query.message.chat_id, text=msg, parse_mode="Markdown")
     await safe_edit(query, "🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
 
+async def whatyouget_handler(update, context):
+    query = update.callback_query
+    try:
+        await query.answer()
+    except:
+        pass
+    msg = (
+        "🎁 *What You Get with Phantom Watch*\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        "🆓 *Free Trial (7 days)*\n"
+        "   └ One full standard scan\n"
+        "   └ Basic summary with threat score\n"
+        "   └ Upgrade required for detailed reports\n\n"
+        "🛡️ *Monthly Plan*\n"
+        "   └ Unlimited full standard scans\n"
+        "   └ Detailed reports with code blocks\n"
+        "   └ Compliance mapping (PCI‑DSS / HIPAA)\n"
+        "   └ All Quick Scan packs\n"
+        "   └ Breach intelligence\n"
+        "   └ Weekly subscription scans\n\n"
+        "👑 *Enterprise Plan*\n"
+        "   └ Everything in Monthly\n"
+        "   └ Deep scan mode (full ports, OS detection)\n"
+        "   └ SpiderFoot – automated OSINT engine\n"
+        "   └ ReconSpider – deep investigation\n"
+        "   └ Prowler – cloud security audits (AWS/Azure/GCP)\n"
+        "   └ Exploitation proof (XSS screenshots)\n"
+        "   └ GitHub secret scanning (Gitleaks)\n"
+        "   └ Continuous CVE monitoring\n"
+        "   └ Priority support\n\n"
+        "━━━━━━━━━━━━━━━━━━\n"
+        "💎 Tap *Upgrade* to see current prices and crypto payment addresses.\n"
+        "📩 Contact admin to activate your plan after payment."
+    )
+    await context.bot.send_message(chat_id=query.message.chat_id, text=msg, parse_mode="Markdown")
+    await safe_edit(query, "🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
+
 # ---------- message handlers ----------
 async def handle_client_message(update, context):
     username = update.message.from_user.username
