@@ -76,17 +76,14 @@ jobs:
         run: |
           pip3 install --break-system-packages prowler
 
-      - name: Install SpiderFoot (from source)
+      - name: Install SpiderFoot (PyPI)
         run: |
-          git clone --depth 1 https://github.com/smicallef/spiderfoot.git /opt/spiderfoot
-          cd /opt/spiderfoot
-          pip3 install --break-system-packages -r requirements.txt
+          pip3 install --break-system-packages spiderfoot
 
-      - name: Install ReconSpider (from source)
+      - name: Install ReconSpider (PyPI)
         run: |
-          git clone --depth 1 https://github.com/bhavsec/reconspider.git /opt/reconspider
-          cd /opt/reconspider
-          pip3 install --break-system-packages -r requirements.txt
+          pip3 install --break-system-packages reconspider
+
 
       - name: Run Phantom Watch
         env:
