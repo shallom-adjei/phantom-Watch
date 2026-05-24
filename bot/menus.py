@@ -14,8 +14,8 @@ def main_menu(admin=False):
         [InlineKeyboardButton("🩸 Check Breaches", callback_data="check_breaches"),
          InlineKeyboardButton("❓ Help", callback_data="help")],
         [InlineKeyboardButton("🔔 Subscribe", callback_data="subscribe"),
-        [InlineKeyboardButton("💎 Upgrade", callback_data="upgrade")],
          InlineKeyboardButton("🔑 Scan GitHub", callback_data="github_scan")],
+        [InlineKeyboardButton("💎 Upgrade", callback_data="upgrade")],
     ]
     if admin:
         buttons.append([InlineKeyboardButton("👑 Admin Menu", callback_data="admin_menu")])
