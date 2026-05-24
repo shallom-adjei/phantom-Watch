@@ -100,11 +100,11 @@ def run_prowler(provider, credentials=None, progress_callback=None):
         return {"error": "Failed to parse Prowler output", "raw": res['stdout'][:500]}
 
 def run_spiderfoot(domain, progress_callback=None):
-    """Run SpiderFoot CLI scan on a domain."""
+    """Run SpiderFoot from cloned repo."""
     if progress_callback:
         progress_callback("🕸️ SpiderFoot OSINT scan...")
     cmd = [
-        "spiderfoot",
+        "python3", "/opt/spiderfoot/sf.py",
         "-s", domain,
         "-q",
         "-o", "json"
@@ -117,10 +117,13 @@ def run_spiderfoot(domain, progress_callback=None):
         return {"error": "SpiderFoot failed", "raw": res['stdout'][:300]}
 
 def run_reconspider(target, progress_callback=None):
-    """Run ReconSpider deep investigation."""
+    """Run ReconSpider from cloned repo."""
     if progress_callback:
         progress_callback("🕷️ ReconSpider deep dive...")
-    cmd = ["reconspider", target]
+    cmd = [
+        "python3", "/opt/reconspider/reconspider.py",
+        target
+    ]
     res = run_command(cmd, timeout=300)
     return res['stdout']
 
