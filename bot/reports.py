@@ -260,6 +260,22 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                     lines_raw = raw.strip().split('\n')
                     real_subs = [l for l in lines_raw if l and not l.startswith('[') and l != domain]
                     snippet = "\n".join(real_subs[:15]) if real_subs else "No live subdomains found."
+                elif key == "spiderfoot":
+                    # Show only the error message, not the whole JSON
+                    if isinstance(raw, dict) and "error" in raw:
+                        snippet = raw["error"]
+                    elif isinstance(raw, list):
+                        snippet = json.dumps(raw, indent=2)[:500] if raw else "No findings."
+                    else:
+                        snippet = clean_ansi(str(raw))[:300] if raw else "No findings."
+                elif key == "reconspider":
+                    # Suppress banners, show only meaningful output
+                    if isinstance(raw, dict) and "error" in raw:
+                        snippet = raw["error"]
+                    elif raw and not raw.startswith("[!]") and len(raw.strip()) > 0:
+                        snippet = clean_ansi(str(raw))[:300]
+                    else:
+                        snippet = "No findings."
                 elif isinstance(raw, (dict, list)):
                     snippet = json.dumps(raw, indent=2)[:500]
                 else:
