@@ -104,7 +104,7 @@ def run_spiderfoot(domain, progress_callback=None):
     if progress_callback:
         progress_callback("🕸️ SpiderFoot OSINT scan...")
     cmd = ["python3", "/opt/spiderfoot/sf.py", "-s", domain, "-q", "-o", "json"]
-    ]
+        base_tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"]
     res = run_command(cmd, timeout=600)
     try:
         data = json.loads(res['stdout'])
