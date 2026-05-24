@@ -89,6 +89,25 @@ async def admin_removeuser_handler(update, context):
             print(f"Edit error: {e}")
     context.user_data["state"] = "REMOVE_USER"
 
+async def admin_update_prices_handler(update, context):
+    query = update.callback_query
+    try: await query.answer()
+    except: pass
+    username = query.from_user.username
+    if username != ADMIN_USERNAME: return
+    await query.edit_message_text("Enter new prices in format: monthly=$199,enterprise=$2,000")
+    context.user_data["state"] = "UPDATE_PRICES"
+
+async def admin_update_addresses_handler(update, context):
+    query = update.callback_query
+    try: await query.answer()
+    except: pass
+    username = query.from_user.username
+    if username != ADMIN_USERNAME: return
+    await query.edit_message_text("Enter new crypto addresses in format: BTC=xxx,ETH=yyy,USDT=zzz")
+    context.user_data["state"] = "UPDATE_ADDRESSES"
+
+
 # Admin wizard message handlers
 async def handle_admin_wizard(update, context):
     username = update.message.from_user.username
@@ -166,6 +185,34 @@ async def handle_admin_wizard(update, context):
         c.execute("UPDATE clients SET expiry='2000-01-01' WHERE username=?", (target,))
         conn.commit()
         await update.message.reply_text(f"❌ User @{target} has been removed. They can no longer use the bot.", reply_markup=admin_menu())
+        context.user_data.pop("state", None)
+        return True
+
+    if state == "UPDATE_PRICES":
+        if username != ADMIN_USERNAME:
+            await update.message.reply_text("❌ Admin only.")
+            return True
+        try:
+            parts = dict(pair.split("=") for pair in text.split(","))
+            from bot.payments import set_plan_prices
+            set_plan_prices(parts)
+            await update.message.reply_text("✅ Prices updated.", reply_markup=admin_menu())
+        except Exception as e:
+            await update.message.reply_text(f"❌ Invalid format. Error: {e}")
+        context.user_data.pop("state", None)
+        return True
+
+    if state == "UPDATE_ADDRESSES":
+        if username != ADMIN_USERNAME:
+            await update.message.reply_text("❌ Admin only.")
+            return True
+        try:
+            parts = dict(pair.split("=") for pair in text.split(","))
+            from bot.payments import set_crypto_addresses
+            set_crypto_addresses(parts)
+            await update.message.reply_text("✅ Crypto addresses updated.", reply_markup=admin_menu())
+        except Exception as e:
+            await update.message.reply_text(f"❌ Invalid format. Error: {e}")
         context.user_data.pop("state", None)
         return True
 

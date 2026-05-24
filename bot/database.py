@@ -42,6 +42,14 @@ c.execute("""CREATE TABLE IF NOT EXISTS scan_results (
     report TEXT, finished INTEGER DEFAULT 0
 )""")
 conn.commit()
+c.execute("""CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+)""")
+# Insert defaults if not exist
+c.execute("INSERT OR IGNORE INTO settings VALUES ('crypto_addresses', '{\"BTC\":\"\",\"ETH\":\"\",\"USDT\":\"\"}')")
+c.execute("INSERT OR IGNORE INTO settings VALUES ('plan_prices', '{\"monthly\":\"$199\",\"enterprise\":\"$2,000\"}')")
+conn.commit()
 
 def is_client(username: str) -> bool:
     c.execute("SELECT 1 FROM clients WHERE username=?", (username,))

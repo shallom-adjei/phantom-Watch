@@ -14,6 +14,7 @@ def main_menu(admin=False):
         [InlineKeyboardButton("🩸 Check Breaches", callback_data="check_breaches"),
          InlineKeyboardButton("❓ Help", callback_data="help")],
         [InlineKeyboardButton("🔔 Subscribe", callback_data="subscribe"),
+        [InlineKeyboardButton("💎 Upgrade", callback_data="upgrade")],
          InlineKeyboardButton("🔑 Scan GitHub", callback_data="github_scan")],
     ]
     if admin:
@@ -24,9 +25,11 @@ def admin_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Add User", callback_data="admin_adduser"),
          InlineKeyboardButton("✅ Verify Domain", callback_data="admin_verify")],
-        [InlineKeyboardButton("📊 Status", callback_data="admin_status")],
-        [InlineKeyboardButton("❌ Remove User", callback_data="admin_removeuser"),
-         InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
+        [InlineKeyboardButton("💲 Update Prices", callback_data="admin_update_prices"),
+         InlineKeyboardButton("💰 Update Addresses", callback_data="admin_update_addresses")],
+        [InlineKeyboardButton("📊 Status", callback_data="admin_status"),
+         InlineKeyboardButton("❌ Remove User", callback_data="admin_removeuser")],
+        [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")],
     ])
 
 def quick_scan_menu():

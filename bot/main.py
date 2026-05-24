@@ -4,11 +4,14 @@ from bot.handlers_client import (
     start_command, scan_full_handler, scan_quick_handler, quick_scan_subhandler,
     set_email_handler, pricing_handler, how_it_works_handler, check_breaches_handler,
     subscribe_handler, github_scan_handler, help_handler, contact_admin_handler,
-    main_menu_handler, handle_client_message, handle_scan_domain,
+    main_menu_handler, handle_client_message, handle_scan_domain, upgrade_handler,
 )
 from bot.handlers_admin import (
     admin_menu_handler, admin_adduser_handler, admin_verify_handler,
     admin_status_handler, admin_removeuser_handler, handle_admin_wizard,
+)
+from bot.handlers_admin import (
+    …, admin_update_prices_handler, admin_update_addresses_handler
 )
 from bot.config import BOT_TOKEN, ADMIN_USERNAME
 from bot.menus import main_menu
@@ -32,6 +35,9 @@ CALLBACK_ROUTES = {
     "admin_verify": admin_verify_handler,
     "admin_status": admin_status_handler,
     "admin_removeuser": admin_removeuser_handler,
+    "admin_update_prices": admin_update_prices_handler,
+    "admin_update_addresses": admin_update_addresses_handler,
+    "upgrade": upgrade_handler,
 }
 
 async def button_router(update, context):

@@ -335,6 +335,26 @@ async def main_menu_handler(update, context):
         pass
     username = query.from_user.username
     await safe_edit(query, "⬇️ Main Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
+async def upgrade_handler(update, context):
+    query = update.callback_query
+    try: await query.answer()
+    except: pass
+    from bot.payments import get_plan_prices, get_crypto_addresses
+    prices = get_plan_prices()
+    addresses = get_crypto_addresses()
+    addr_lines = "\n".join(f"{coin}: `{addr}`" for coin, addr in addresses.items() if addr)
+    msg = (
+        "💎 *Upgrade Phantom Watch*\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        f"🛡️ Monthly: {prices.get('monthly','$199')}\n"
+        f"👑 Enterprise: {prices.get('enterprise','$2,000')}\n\n"
+        "📩 *Send payment to one of the addresses below*\n"
+        f"{addr_lines}\n\n"
+        "After payment, send a screenshot to the admin. Your plan will be activated within minutes.\n"
+        f"Contact: @{ADMIN_USERNAME}"
+    )
+    await context.bot.send_message(chat_id=query.message.chat_id, text=msg, parse_mode="Markdown")
+    await safe_edit(query, "🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
 
 # ---------- message handlers ----------
 async def handle_client_message(update, context):
