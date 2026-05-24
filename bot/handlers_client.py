@@ -300,11 +300,19 @@ async def help_handler(update, context):
         "📄 *Metagoofil*\n   └ Extract metadata from public files\n\n"
         "👤 *Sherlock*\n   └ Social media username tracking\n\n"
         "🦠 *Dalfox*\n   └ Automated XSS scanning\n\n"
+        "🧬 *Nuclei*\n   └ Vulnerability validation (CVEs)\n\n"
+        "🌐 *Subfinder*\n   └ Passive subdomain discovery\n\n"
+        "🌀 *FFUF*\n   └ Hidden directory & file fuzzing\n\n"
+        "📡 *Subdomain Discovery*\n   └ Passive + live verification (MassDNS)\n\n"
+        "🔑 *Gitleaks*\n   └ GitHub secret scanning\n\n"
+        "🕸️ *SpiderFoot*\n   └ OSINT automation (deep scans)\n\n"
+        "🕷️ *ReconSpider*\n   └ Deep investigation (IP/email/domain)\n\n"
+        "☁️ *Prowler*\n   └ Cloud security audits (AWS/Azure/GCP)\n\n"
         "🩸 *Check Breaches*\n   └ Email breach lookup\n\n"
         "🔑 *GitHub Scan*\n   └ Detect exposed secrets & keys\n\n"
         "━━━━━━━━━━━━━━━\n"
         "🚀 *Upgrade Available*\n"
-        "PDF reports • Compliance mapping • Advanced scans"
+        "Compliance mapping • Advanced scans • Priority support"
     )
     await context.bot.send_message(chat_id=query.message.chat_id, text=help_text, parse_mode="Markdown")
     await safe_edit(query, "🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
