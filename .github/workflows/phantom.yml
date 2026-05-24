@@ -72,11 +72,9 @@ jobs:
           cd /tmp/massdns && make -j$(nproc) && sudo cp bin/massdns /usr/local/bin/
           wget -q https://raw.githubusercontent.com/blechschmidt/massdns/master/lists/resolvers.txt -O /tmp/resolvers.txt
 
-      - name: Install Prowler
+      - name: Install Prowler (PyPI)
         run: |
-          sudo apt-get install -y python3-pip python3-dev
-          sudo pip3 install --break-system-packages prowler
-          prowler --version
+          pip3 install --break-system-packages prowler
 
       - name: Install SpiderFoot (from source)
         run: |
