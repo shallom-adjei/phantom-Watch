@@ -17,6 +17,7 @@ from bot.config import BOT_TOKEN, ADMIN_USERNAME
 from bot.menus import main_menu
 import asyncio
 import traceback
+import os
 
 CALLBACK_ROUTES = {
     "main_menu": main_menu_handler,
@@ -54,6 +55,7 @@ async def button_router(update, context):
             traceback.print_exc()
 
 async def message_router(update, context):
+    await asyncio.sleep(0)
     username = update.message.from_user.username
     text = update.message.text.strip()
     state = context.user_data.get("state")
@@ -117,6 +119,28 @@ async def background_tasks(app):
         except Exception as e:
             print(f"Background task error: {e}")
         await asyncio.sleep(3600)  # run every hour
+import aiohttp
+
+async def auto_restart():
+    """Trigger a new workflow run 5 minutes before timeout (50 minutes)."""
+    await asyncio.sleep(3000)  # 50 minutes
+    token = os.getenv("GH_PAT")
+    if not token:
+        print("[!] GH_PAT not set – cannot auto-restart")
+        return
+    repo = os.getenv("GITHUB_REPOSITORY", "shallom-adjei/phantom-Watch")
+    url = f"https://api.github.com/repos/{repo}/actions/workflows/phantom.yml/dispatches"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    payload = {"ref": "main"}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=payload, headers=headers) as resp:
+            if resp.status == 204:
+                print("✅ Auto-restart triggered.")
+            else:
+                print(f"[!] Auto-restart failed: {resp.status}")
 
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -129,6 +153,7 @@ def main():
     loop.create_task(background_tasks(app))
 
     print("👻 Phantom Watch is watching...")
+    loop.create_task(auto_restart())
     app.run_polling()
 
 if __name__ == "__main__":

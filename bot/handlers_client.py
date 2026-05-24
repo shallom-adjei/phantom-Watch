@@ -7,6 +7,8 @@ from bot.config import ADMIN_USERNAME
 from bot.scanners import run_scan
 from bot.reports import build_report_markdown
 from bot.menus import main_menu, admin_menu
+MAX_CONCURRENT_SCANS = 3
+scan_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
 
 # ---------- safe message editing ----------
 async def safe_edit(query, text, **kwargs):
@@ -460,6 +462,14 @@ async def handle_scan_domain(update, context):
     if not is_active(username):
         await update.message.reply_text("⛔ Not authorized or trial expired.")
         return True
+    if scan_semaphore.locked():
+        await update.message.reply_text("⏳ All scan slots are currently busy. Your scan will start as soon as a slot is free...")
+
+    async with scan_semaphore:
+        try:
+            results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools, deep)
+        except Exception as e:
+            ...
 
     # Verification
     if username != ADMIN_USERNAME:
