@@ -7,7 +7,7 @@ from bot.config import ADMIN_USERNAME
 from bot.scanners import run_scan
 from bot.reports import build_report_markdown
 from bot.menus import main_menu, admin_menu
-MAX_CONCURRENT_SCANS = 3
+MAX_CONCURRENT_SCANS = 5
 scan_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
 
 # ---------- safe message editing ----------
@@ -19,27 +19,31 @@ async def safe_edit(query, text, **kwargs):
 
 # ---------- breach check ----------
 async def check_breach(email: str, context, chat_id: int):
-    try:
-        resp = requests.get(
-            f"https://api.xposedornot.com/v1/breach-analytics?email={email}",
-            timeout=15,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            breach_details = data.get("breach_details", {})
-            if breach_details:
-                total = len(breach_details)
-                lines = [f"🩸 *Breach Report for {email}*", f"Found in *{total}* known breaches:\n"]
-                for name, info in list(breach_details.items())[:10]:
-                    domain = info.get("domain", "unknown")
-                    date = info.get("breach_date", "N/A")
-                    lines.append(f"• *{name}* ({domain}) – {date}")
-                if total > 10:
-                    lines.append(f"… and {total - 10} more breaches.")
-                await context.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode="Markdown")
-                return
-    except:
-        pass
+    import requests
+    def _do_request():
+        try:
+            resp = requests.get(
+                f"https://api.xposedornot.com/v1/breach-analytics?email={email}",
+                timeout=15,
+            )
+            return resp
+        except:
+            return None
+    resp = await asyncio.to_thread(_do_request)
+    if resp and resp.status_code == 200:
+        data = resp.json()
+        breach_details = data.get("breach_details", {})
+        if breach_details:
+            total = len(breach_details)
+            lines = [f"🩸 *Breach Report for {email}*", f"Found in *{total}* known breaches:\n"]
+            for name, info in list(breach_details.items())[:10]:
+                domain = info.get("domain", "unknown")
+                date = info.get("breach_date", "N/A")
+                lines.append(f"• *{name}* ({domain}) – {date}")
+            if total > 10:
+                lines.append(f"… and {total - 10} more breaches.")
+            await context.bot.send_message(chat_id=chat_id, text="\n".join(lines), parse_mode="Markdown")
+            return
     await context.bot.send_message(chat_id=chat_id, text="✅ No breaches found for this email.")
 
 # ---------- callback handlers ----------
@@ -422,16 +426,20 @@ async def handle_client_message(update, context):
             await update.message.reply_text("Invalid GitHub URL.")
             return True
         await update.message.reply_text("🔑 Scanning for secrets...")
+
         try:
-            repo_name = repo_url.rstrip("/").split("/")[-1]
+            repo_url_final = repo_url
             clone_dir = f"/tmp/{repo_name}_{random.randint(1000,9999)}"
-            subprocess.run(["git", "clone", "--depth=1", repo_url, clone_dir], check=True, timeout=30)
-            # Run Gitleaks
-            result = subprocess.run(
-                ["gitleaks", "detect", "--source", clone_dir, "--no-git", "--report-format", "json", "--exit-code", "0"],
-                capture_output=True, text=True, timeout=120
-            )
-            shutil.rmtree(clone_dir, ignore_errors=True)
+            # Offload git clone + gitleaks to a thread so the bot stays responsive
+            def _run_gitleaks():
+                subprocess.run(["git", "clone", "--depth=1", repo_url_final, clone_dir], check=True, timeout=30)
+                result = subprocess.run(
+                    ["gitleaks", "detect", "--source", clone_dir, "--no-git", "--report-format", "json", "--exit-code", "0"],
+                    capture_output=True, text=True, timeout=120
+                )
+                shutil.rmtree(clone_dir, ignore_errors=True)
+                return result
+            result = await asyncio.to_thread(_run_gitleaks)
             if result.stdout.strip():
                 findings = json.loads(result.stdout)
                 if findings:
@@ -447,10 +455,6 @@ async def handle_client_message(update, context):
                 await update.message.reply_text("✅ No secrets detected.")
         except Exception as e:
             await update.message.reply_text(f"❌ Gitleaks scan failed: {e}")
-        context.user_data.pop("state", None)
-        return True
-
-    return False
 
 # ---------- scan domain handler ----------
 async def handle_scan_domain(update, context):
@@ -467,7 +471,7 @@ async def handle_scan_domain(update, context):
 
     async with scan_semaphore:
         try:
-            results = await loop.run_in_executor(None, run_scan, domain, email, sync_progress, tools, deep)
+        results = await asyncio.to_thread(run_scan, domain, email, sync_progress, tools, deep)
         except Exception as e:
             ...
 
