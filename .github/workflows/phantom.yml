@@ -16,14 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Restore database from previous run
-      - name: Restore database
-        uses: actions/download-artifact@v4
-        with:
-          name: phantom-db
-          path: .
-        continue-on-error: true
-
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -96,11 +88,3 @@ jobs:
           TURSO_DB_URL: ${{ secrets.TURSO_DB_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
         run: python3 -m bot.main
-
-      # Save database for next run
-      - name: Save database
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phantom-db
-          path: phantom_clients.db
