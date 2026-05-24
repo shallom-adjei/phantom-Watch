@@ -179,6 +179,27 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             lines.append("🧬 Nuclei Findings")
             lines.append(safe_code_block(nuclei_text))
 
+        # SpiderFoot explicit block (always show if run)
+        if 'spiderfoot' in results:
+            data = results['spiderfoot']
+            if isinstance(data, dict) and 'error' in data:
+                snippet = f"SpiderFoot error: {data['error']}"
+            else:
+                snippet = json.dumps(data, indent=2)[:500] if data else "No findings."
+            lines.append("🕸️ SpiderFoot")
+            lines.append("```")
+            lines.append(snippet)
+            lines.append("```")
+
+        # ReconSpider explicit block
+        if 'reconspider' in results:
+            raw = results['reconspider']
+            snippet = raw[:500] if raw else "No findings."
+            lines.append("🕷️ ReconSpider")
+            lines.append("```")
+            lines.append(snippet)
+            lines.append("```")
+
         # Compliance table (only for full scans)
         if show_compliance:
             lines.append("")
