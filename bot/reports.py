@@ -252,6 +252,20 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                 raw = results[key]
 
                 # Tool‑specific filtering
+                # Suppress ReconSpider ASCII banner
+                if key == "reconspider" and isinstance(raw, str):
+                    # If the output is only the banner, show "No findings."
+                    if raw.strip().startswith("__________"):
+                        snippet = "No findings."
+                    elif raw.strip():
+                        snippet = clean_ansi(raw)[:300]
+                    else:
+                        snippet = "No findings."
+                    lines.append(label)
+                    lines.append("```")
+                    lines.append(snippet)
+                    lines.append("```")
+                    continue
                 if key == "dnstwist":
                     lines_raw = raw.strip().split('\n')
                     registered = [l for l in lines_raw if "registered" in l]

@@ -2,7 +2,7 @@ name: Phantom Watch Bot (24/7)
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -12,7 +12,7 @@ concurrency:
 jobs:
   bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
 

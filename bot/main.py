@@ -107,27 +107,6 @@ async def message_router(update, context):
     except Exception as e:
         print(f"Fallback error: {e}")
 
-async def auto_restart():
-    """Trigger a new workflow run 5 minutes before timeout (50 minutes)."""
-    await asyncio.sleep(3000)  # 50 minutes
-    token = os.getenv("GH_PAT")
-    if not token:
-        print("[!] GH_PAT not set – cannot auto-restart")
-        return
-    repo = os.getenv("GITHUB_REPOSITORY", "shallom-adjei/phantom-Watch")
-    url = f"https://api.github.com/repos/{repo}/actions/workflows/phantom.yml/dispatches"
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-    payload = {"ref": "main"}
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload, headers=headers) as resp:
-            if resp.status == 204:
-                print("✅ Auto-restart triggered.")
-            else:
-                print(f"[!] Auto-restart failed: {resp.status}")
-
 async def background_tasks(app):
     """Start subscription checks and CVE monitor."""
     while True:
@@ -148,8 +127,6 @@ def main():
     # Start background tasks and auto-restart
     loop = asyncio.get_event_loop()
     loop.create_task(background_tasks(app))
-    loop.create_task(auto_restart())
-
     print("👻 Phantom Watch is watching...")
     app.run_polling()
 

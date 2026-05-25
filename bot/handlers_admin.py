@@ -168,8 +168,10 @@ async def handle_admin_wizard(update, context):
     if state == "VERIFY_DOMAIN":
         target = context.user_data["verify_target"]
         domain = text.lower()
-        c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (target, domain, "admin_verified"))
-        conn.commit()
+        def _verify():
+            c.execute("INSERT OR REPLACE INTO verification VALUES (?,?,?)", (target, domain, "admin_verified"))
+            conn.commit()
+        await asyncio.to_thread(_verify)
         await update.message.reply_text(f"✅ Domain {domain} verified for @{target}.", reply_markup=admin_menu())
         context.user_data.pop("state", None)
         context.user_data.pop("verify_target", None)
