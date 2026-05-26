@@ -18,11 +18,12 @@ def run_command(cmd, timeout=150):
     except Exception as e:
         return {"stdout": f"[!] Error: {e}", "returncode": -1, "failed": True}
 
-def run_nuclei(domain, progress_callback=None):
+def run_nuclei(domain, progress_callback=None, deep=False):
     if progress_callback:
         progress_callback("🧬 Nuclei scanning for vulnerabilities...")
     cmd = ["nuclei", "-u", f"http://{domain}", "-severity", "critical,high,medium", "-silent", "-jsonl"]
-    res = run_command(cmd, timeout=300)
+    timeout = 600 if deep else 300
+    res = run_command(cmd, timeout=timeout)
     return res['stdout']
 
 def run_subfinder(domain, progress_callback=None):
@@ -124,7 +125,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
             "sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"
         ]
         if deep:
-            tools = base_tools + ["spiderfoot"]
+            tools = base_tools + ["spiderfoot", "prowler"]
         else:
             tools = base_tools
 
@@ -138,7 +139,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
         set_status("nmap", "running")
         if progress_callback:
             progress_callback("⚡ Nmap (full power)" if deep else "⚡ Nmap scanning...")
-        cmd = ["nmap","-p-","-sV","-O","-T4","--script","vuln,exploit,auth,default,discovery",domain] if deep else \
+        cmd = ["sudo","nmap","-p-","-sV","-O","-T4","--script","vuln,exploit,auth,default,discovery",domain] if deep else \
               ["nmap","-sV","-T4","--top-ports","200",domain]
         res = run_command(cmd, timeout=600 if deep else 180)
         results['nmap'] = res['stdout']
@@ -157,6 +158,11 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
         set_status("nikto", "failed" if res['failed'] else "done")
         if res['failed']:
             print(f"[!] Nikto failed (code {res['returncode']})")
+
+            elif tool == "prowler":
+                # Prowler requires cloud credentials; skip if not provided
+                results['prowler'] = {"status": "skipped", "message": "No cloud credentials provided. Enterprise clients can request a cloud audit."}
+                set_status("prowler", "done")
 
     if "metagoofil" in tools:
         set_status("metagoofil", "running")
@@ -210,7 +216,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
                 elif tool == "dalfox":
                     return ("dalfox", run_command(["dalfox","url",f"http://{domain}","--silence"], timeout=200)['stdout'])
                 elif tool == "nuclei":
-                    return ("nuclei", run_nuclei(domain, progress_callback=None))
+                return ("nuclei", run_nuclei(domain, progress_callback=None, deep=deep))
                 elif tool == "subfinder":
                     return ("subfinder", "\n".join(run_subfinder(domain)))
                 elif tool == "ffuf":
@@ -221,6 +227,8 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
                     return ("spiderfoot", run_spiderfoot(domain))
                 elif tool == "reconspider":
                     return ("reconspider", run_reconspider(domain))
+                elif tool == "prowler":
+                return ("prowler", {"status": "skipped", "message": "No cloud credentials provided. Enterprise clients can request a cloud audit."})
             except Exception as e:
                 return (tool, f"[!] Error: {e}")
             finally:
