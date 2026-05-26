@@ -159,11 +159,6 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
         if res['failed']:
             print(f"[!] Nikto failed (code {res['returncode']})")
 
-            elif tool == "prowler":
-                # Prowler requires cloud credentials; skip if not provided
-                results['prowler'] = {"status": "skipped", "message": "No cloud credentials provided. Enterprise clients can request a cloud audit."}
-                set_status("prowler", "done")
-
     if "metagoofil" in tools:
         set_status("metagoofil", "running")
         if progress_callback:
@@ -216,7 +211,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
                 elif tool == "dalfox":
                     return ("dalfox", run_command(["dalfox","url",f"http://{domain}","--silence"], timeout=200)['stdout'])
                 elif tool == "nuclei":
-                return ("nuclei", run_nuclei(domain, progress_callback=None, deep=deep))
+                    return ("nuclei", run_nuclei(domain, progress_callback=None, deep=deep))
                 elif tool == "subfinder":
                     return ("subfinder", "\n".join(run_subfinder(domain)))
                 elif tool == "ffuf":
@@ -270,7 +265,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
                 elif tool == "dalfox":
                     results['dalfox'] = run_command(["dalfox","url",f"http://{domain}","--silence"], timeout=200)['stdout']
                 elif tool == "nuclei":
-                    results['nuclei'] = run_nuclei(domain, progress_callback=None)
+                    results['nuclei'] = run_nuclei(domain, progress_callback=None, deep=deep)
                 elif tool == "subfinder":
                     subs = run_subfinder(domain)
                     results['subfinder'] = "\n".join(subs)
