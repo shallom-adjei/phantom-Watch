@@ -275,16 +275,21 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                         snippet = json.dumps(raw, indent=2)[:500] if raw else "No findings."
                     else:
                         snippet = clean_ansi(str(raw))[:300] if raw else "No findings."
+                elif key == "prowler":
+                    if isinstance(raw, dict) and raw.get("status") == "skipped":
+                        snippet = raw.get("message", "Cloud audit skipped.")
+                    else:
+                        snippet = json.dumps(raw, indent=2)[:500]
                 elif isinstance(raw, (dict, list)):
                     snippet = json.dumps(raw, indent=2)[:500]
                 else:
-                    # Enterprise deep scans get more detail
-                    max_detail = 1200 if deep else 300
+                    # Paid clients (monthly/enterprise) get more detail
+                    max_detail = 1200 if detailed else 300
                     snippet = clean_ansi(str(raw))[:max_detail] if raw else "No findings."
 
                 safe = snippet.replace("```", "'''")
                 lines.append(label)
-                lines.append(safe_code_block(safe, max_len=1200 if deep else 800))
+                lines.append(safe_code_block(safe, max_len=1200 if detailed else 800))
 
         # Nuclei explicit block (always show if run)
         if 'nuclei' in results:
