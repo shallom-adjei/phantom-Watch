@@ -180,7 +180,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
     # ----- Light tools (parallel in deep mode, else sequential) -----
     light_tools = [t for t in tools if t in (
         "whatweb","theHarvester","dnstwist","sherlock","dalfox",
-        "nuclei","subfinder","ffuf","subfinder_massdns","spiderfoot","reconspider"
+        "nuclei","subfinder","ffuf","subfinder_massdns","spiderfoot","reconspider","prowler"
     )]
 
     if deep and light_tools:
@@ -223,7 +223,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
                 elif tool == "reconspider":
                     return ("reconspider", run_reconspider(domain))
                 elif tool == "prowler":
-                return ("prowler", {"status": "skipped", "message": "No cloud credentials provided. Enterprise clients can request a cloud audit."})
+                    return ("prowler", {"status": "skipped", "message": "No cloud credentials provided. Enterprise clients can request a cloud audit."})
             except Exception as e:
                 return (tool, f"[!] Error: {e}")
             finally:
@@ -277,6 +277,9 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
                     results['spiderfoot'] = run_spiderfoot(domain)
                 elif tool == "reconspider":
                     results['reconspider'] = run_reconspider(domain)
+                elif tool == "prowler":
+                    results['prowler'] = {"status": "skipped", "message": "No cloud credentials provided. Enterprise clients can request a cloud audit."}
+                    set_status("prowler", "done")
                 set_status(tool, "done")
             except Exception as e:
                 results[tool] = f"[!] Error: {e}"
