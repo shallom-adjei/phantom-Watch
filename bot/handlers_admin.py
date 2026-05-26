@@ -200,7 +200,12 @@ async def handle_admin_wizard(update, context):
         try:
             parts = dict(pair.split("=") for pair in text.split(","))
             from bot.payments import set_plan_prices
+        try:
+            from bot.payments import set_plan_prices   # or set_crypto_addresses
             set_plan_prices(parts)
+            await update.message.reply_text("✅ Prices updated.", reply_markup=admin_menu())
+        except Exception:
+            await update.message.reply_text("❌ Could not update prices. The database is temporarily unavailable. Please try again in a few seconds.", reply_markup=admin_menu())
             await update.message.reply_text("✅ Prices updated.", reply_markup=admin_menu())
         except Exception as e:
             await update.message.reply_text(f"❌ Invalid format. Error: {e}")
@@ -214,7 +219,12 @@ async def handle_admin_wizard(update, context):
         try:
             parts = dict(pair.split("=") for pair in text.split(","))
             from bot.payments import set_crypto_addresses
-            set_crypto_addresses(parts)
+        try:
+            from bot.payments import set_plan_prices   # or set_crypto_addresses
+            set_plan_prices(parts)
+            await update.message.reply_text("✅ Prices updated.", reply_markup=admin_menu())
+        except Exception:
+            await update.message.reply_text("❌ Could not update prices. The database is temporarily unavailable. Please try again in a few seconds.", reply_markup=admin_menu())
             await update.message.reply_text("✅ Crypto addresses updated.", reply_markup=admin_menu())
         except Exception as e:
             await update.message.reply_text(f"❌ Invalid format. Error: {e}")

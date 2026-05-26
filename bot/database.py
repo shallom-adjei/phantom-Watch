@@ -1,61 +1,110 @@
-"""Database helpers – uses Turso cloud DB for persistence."""
-import os
-import sqlite3
+"""Database helpers – Turso with automatic retry for every operation."""
+import os, sqlite3, time
 from datetime import datetime, timedelta
 
 DB_URL = os.getenv("TURSO_DB_URL")
 AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 
+# Connect
 if DB_URL and AUTH_TOKEN:
-    import libsql_experimental
-    conn = libsql_experimental.connect(DB_URL, auth_token=AUTH_TOKEN)
+    try:
+        import libsql_experimental
+        _real_conn = libsql_experimental.connect(DB_URL, auth_token=AUTH_TOKEN)
+    except Exception:
+        _real_conn = sqlite3.connect("phantom_clients.db")
 else:
-    conn = sqlite3.connect("phantom_clients.db")
+    _real_conn = sqlite3.connect("phantom_clients.db")
 
-c = conn.cursor()
+_real_c = _real_conn.cursor()
 
-# Create tables if they don't exist
-c.execute("""CREATE TABLE IF NOT EXISTS clients (
+# ---------- Automatic retry wrappers ----------
+def _retry_execute(query, params=None, retries=3, delay=1.0):
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            if params:
+                return _real_c.execute(query, params)
+            else:
+                return _real_c.execute(query)
+        except Exception as e:
+            last_exc = e
+            if attempt < retries - 1:
+                time.sleep(delay * (2 ** attempt))
+    raise last_exc
+
+def _retry_commit(retries=3, delay=1.0):
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            _real_conn.commit()
+            return
+        except Exception as e:
+            last_exc = e
+            if attempt < retries - 1:
+                time.sleep(delay * (2 ** attempt))
+    raise last_exc
+
+# Replace the global c and conn so that every module automatically retries
+class RetryCursor:
+    def execute(self, query, params=None):
+        return _retry_execute(query, params)
+    def fetchone(self):
+        return _real_c.fetchone()
+    def fetchall(self):
+        return _real_c.fetchall()
+    def __getattr__(self, name):
+        return getattr(_real_c, name)
+
+class RetryConnection:
+    def commit(self):
+        _retry_commit()
+    def __getattr__(self, name):
+        return getattr(_real_conn, name)
+
+c = RetryCursor()
+conn = RetryConnection()
+
+# ---------- Table creation ----------
+_retry_execute("""CREATE TABLE IF NOT EXISTS clients (
     username TEXT PRIMARY KEY,
     plan TEXT DEFAULT 'free',
     expiry TEXT,
     email_collect TEXT DEFAULT '',
     scan_used INTEGER DEFAULT 0
 )""")
-c.execute("""CREATE TABLE IF NOT EXISTS verification (
+_retry_execute("""CREATE TABLE IF NOT EXISTS verification (
     username TEXT, domain TEXT, token TEXT,
     PRIMARY KEY(username, domain)
 )""")
-c.execute("""CREATE TABLE IF NOT EXISTS subscriptions (
+_retry_execute("""CREATE TABLE IF NOT EXISTS subscriptions (
     username TEXT, domain TEXT,
     last_scan_time TEXT, last_report_json TEXT,
     PRIMARY KEY(username, domain)
 )""")
-c.execute("""CREATE TABLE IF NOT EXISTS client_tech (
+_retry_execute("""CREATE TABLE IF NOT EXISTS client_tech (
     username TEXT, domain TEXT, tech TEXT,
     last_check TEXT,
     PRIMARY KEY(username, domain, tech)
 )""")
-c.execute("""CREATE TABLE IF NOT EXISTS scan_results (
+_retry_execute("""CREATE TABLE IF NOT EXISTS scan_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT, domain TEXT, timestamp TEXT,
     report TEXT, finished INTEGER DEFAULT 0
 )""")
-c.execute("""CREATE TABLE IF NOT EXISTS settings (
+_retry_execute("""CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
 )""")
-c.execute("INSERT OR IGNORE INTO settings VALUES ('crypto_addresses', '{\"BTC\":\"\",\"ETH\":\"\",\"USDT\":\"\"}')")
-c.execute("INSERT OR IGNORE INTO settings VALUES ('plan_prices', '{\"monthly\":\"$199\",\"enterprise\":\"$2,000\"}')")
-conn.commit()
+_retry_execute("INSERT OR IGNORE INTO settings VALUES ('crypto_addresses', '{\"BTC\":\"\",\"ETH\":\"\",\"USDT\":\"\"}')")
+_retry_execute("INSERT OR IGNORE INTO settings VALUES ('plan_prices', '{\"monthly\":\"$199\",\"enterprise\":\"$2,000\"}')")
+_retry_commit()
 
 def is_client(username: str) -> bool:
-    c.execute("SELECT 1 FROM clients WHERE username=?", (username,))
-    return c.fetchone() is not None
+    row = c.execute("SELECT 1 FROM clients WHERE username=?", (username,))
+    return row.fetchone() is not None
 
 def is_active(username: str) -> bool:
-    c.execute("SELECT plan, expiry, scan_used FROM clients WHERE username=?", (username,))
-    row = c.fetchone()
+    row = c.execute("SELECT plan, expiry, scan_used FROM clients WHERE username=?", (username,)).fetchone()
     if not row:
         return False
     plan, expiry, scan_used = row[0], row[1], row[2]
