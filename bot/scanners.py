@@ -125,7 +125,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
             "sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"
         ]
         if deep:
-            tools = base_tools + ["spiderfoot", "prowler"]
+            tools = base_tools + ["spiderfoot", "reconspider", "prowler"]
         else:
             tools = base_tools
 

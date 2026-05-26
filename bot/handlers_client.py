@@ -549,7 +549,7 @@ async def handle_scan_domain(update, context):
                 if tools is None:
                     actual_tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"]
                     if deep:
-                        actual_tools += ["spiderfoot"]
+                        actual_tools += ["spiderfoot", "reconspider", "prowler"]
                 else:
                     actual_tools = tools
 
