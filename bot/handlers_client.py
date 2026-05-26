@@ -545,24 +545,72 @@ async def handle_scan_domain(update, context):
     async def scan_task():
         try:
             async with scan_semaphore:
-                progress_msg = await context.bot.send_message(chat_id=chat_id, text="⚡ Preparing tools...")
-                loop = asyncio.get_running_loop()
+                # Determine the full tool list
+                if tools is None:
+                    actual_tools = ["nmap","nikto","whatweb","theHarvester","dnstwist","metagoofil","sherlock","dalfox","nuclei","subfinder","ffuf","subfinder_massdns"]
+                    if deep:
+                        actual_tools += ["spiderfoot"]
+                else:
+                    actual_tools = tools
 
-                def sync_progress(msg):
-                    async def _upd():
+                # Status box formatter
+                def format_box(domain, statuses):
+                    header = "╔══════════════════════╗\n║    PHANTOM WATCH     ║\n╚══════════════════════╝"
+                    lines = [header, ""]
+                    label_map = {
+                        "nmap":"Nmap","nikto":"Nikto","whatweb":"WhatWeb","theHarvester":"Harvester",
+                        "dnstwist":"DNSTwist","metagoofil":"Metagoofil","sherlock":"Sherlock",
+                        "dalfox":"Dalfox","nuclei":"Nuclei","subfinder":"Subfinder","ffuf":"FFUF",
+                        "subfinder_massdns":"Subdomain Disc.","spiderfoot":"SpiderFoot",
+                        "reconspider":"ReconSpider","prowler":"Prowler"
+                    }
+                    for t in actual_tools:
+                        icon = statuses.get(t, "⏳")
+                        label = label_map.get(t, t)
+                        lines.append(f"{icon} {label}")
+                    lines.append("")
+                    lines.append(f"🌐 Target: {domain}")
+                    return "\n".join(lines)
+
+                statuses = {t: "⏳" for t in actual_tools}
+                box_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=format_box(domain, statuses)
+                )
+
+                loop = asyncio.get_running_loop()
+                def tool_status_callback(tool, status):
+                    icon = {"running":"⚡","done":"✅","failed":"❌"}.get(status, "⏳")
+                    statuses[tool] = icon
+                    async def _update():
                         try:
-                            await progress_msg.edit_text(msg)
+                            await box_msg.edit_text(format_box(domain, statuses))
                         except:
                             pass
-                    asyncio.run_coroutine_threadsafe(_upd(), loop)
+                    asyncio.run_coroutine_threadsafe(_update(), loop)
 
-                results = await asyncio.to_thread(run_scan, domain, email, sync_progress, tools, deep)
+                # Start the scan (no old progress callback, just the box)
+                results = await asyncio.to_thread(
+                    run_scan, domain, email, None, actual_tools, deep, tool_status_callback
+                )
 
+                # Final update – mark all unfinished as done (should already be)
+                for t in actual_tools:
+                    if statuses[t] not in ("✅","❌"):
+                        statuses[t] = "✅"
                 try:
-                    await progress_msg.delete()
+                    await box_msg.edit_text(format_box(domain, statuses))
                 except:
                     pass
 
+                # Delete box after a brief moment (or keep it – your choice)
+                await asyncio.sleep(2)
+                try:
+                    await box_msg.delete()
+                except:
+                    pass
+
+                # Now generate and send the report (same logic as before)
                 if results:
                     detailed = plan in ("monthly", "enterprise")
                     from bot.reports import build_report_markdown
