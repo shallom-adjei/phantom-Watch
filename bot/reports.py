@@ -153,7 +153,8 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
     lines.append("")
     lines.append("━━━━━━━━━━━━━━━━━━")
 
-    # Brief summary
+    # Brief summary – keep all existing summary lines as you had them (they work)
+    # (Paste your existing summary lines here – they are correct)
     if 'nmap' in results:
         ports = len(re.findall(r"^\d+/tcp\s+open\s+", results.get("nmap",""), re.MULTILINE))
         vulns = len(re.findall(r"\|.*VULNERABLE.*", results.get("nmap","")))
@@ -251,22 +252,15 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             if key in results and "Error" not in str(results.get(key, "")):
                 raw = results[key]
 
-                # Tool‑specific filtering
-                # Suppress ReconSpider ASCII banner
+                # --- Tool‑specific handling ---
                 if key == "reconspider" and isinstance(raw, str):
-                    # If the output is only the banner, show "No findings."
                     if raw.strip().startswith("__________"):
                         snippet = "No findings."
                     elif raw.strip():
                         snippet = clean_ansi(raw)[:300]
                     else:
                         snippet = "No findings."
-                    lines.append(label)
-                    lines.append("```")
-                    lines.append(snippet)
-                    lines.append("```")
-                    continue
-                if key == "dnstwist":
+                elif key == "dnstwist":
                     lines_raw = raw.strip().split('\n')
                     registered = [l for l in lines_raw if "registered" in l]
                     snippet = "\n".join(registered[:15]) if registered else "No typosquatting domains registered."
@@ -275,32 +269,23 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
                     real_subs = [l for l in lines_raw if l and not l.startswith('[') and l != domain]
                     snippet = "\n".join(real_subs[:15]) if real_subs else "No live subdomains found."
                 elif key == "spiderfoot":
-                    # Show only the error message, not the whole JSON
                     if isinstance(raw, dict) and "error" in raw:
                         snippet = raw["error"]
                     elif isinstance(raw, list):
                         snippet = json.dumps(raw, indent=2)[:500] if raw else "No findings."
                     else:
                         snippet = clean_ansi(str(raw))[:300] if raw else "No findings."
-                elif key == "reconspider":
-                    # Suppress banners, show only meaningful output
-                    if isinstance(raw, dict) and "error" in raw:
-                        snippet = raw["error"]
-                    elif raw and not raw.startswith("[!]") and len(raw.strip()) > 0:
-                        snippet = clean_ansi(str(raw))[:300]
-                    else:
-                        snippet = "No findings."
                 elif isinstance(raw, (dict, list)):
                     snippet = json.dumps(raw, indent=2)[:500]
                 else:
-                    snippet = clean_ansi(str(raw))[:300] if raw else "No findings."
+                    # Enterprise deep scans get more detail
+                    max_detail = 1200 if deep else 300
+                    snippet = clean_ansi(str(raw))[:max_detail] if raw else "No findings."
+
                 safe = snippet.replace("```", "'''")
                 lines.append(label)
-                lines.append("```")
-                lines.append(safe)
-                lines.append("```")
-                if key in ("spiderfoot", "reconspider") and isinstance(raw, dict) and "error" in raw:
-                    snippet = raw["error"]
+                lines.append(safe_code_block(safe, max_len=1200 if deep else 800))
+
         # Nuclei explicit block (always show if run)
         if 'nuclei' in results:
             nuclei_out = results['nuclei']
@@ -309,9 +294,7 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             else:
                 nuclei_text = clean_ansi(nuclei_out).replace("```", "'''")[:500]
             lines.append("🧬 Nuclei Findings")
-            lines.append("```")
-            lines.append(nuclei_text)
-            lines.append("```")
+            lines.append(safe_code_block(nuclei_text))
 
         # Compliance table (only for full scans)
         if show_compliance:
