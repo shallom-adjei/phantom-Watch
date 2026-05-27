@@ -175,7 +175,7 @@ async def pricing_handler(update, context):
         "🛡️ *Monthly Plan — $199/month*\n"
         "   Designed for growing businesses\n\n"
         "   ✔ Unlimited full scans\n"
-        "   ✔ Professional PDF reports\n"
+        "   ✔ Professional reports\n"
         "   ✔ Compliance mapping\n"
         "   ✔ Breach intelligence monitoring\n"
         "   ✔ Weekly automated scans\n"
@@ -616,13 +616,33 @@ async def handle_scan_domain(update, context):
                     from bot.reports import build_report_markdown
                     show_compliance = (scan_type == "full")
                     report_md = build_report_markdown(domain, results, detailed, deep, show_compliance)
-                    chunk_size = 3500
-                    for i in range(0, len(report_md), chunk_size):
-                        chunk = report_md[i:i+chunk_size]
+
+                    # Safe chunker – never break inside a code block
+                    raw_lines = report_md.split('\n')
+                    chunks = []
+                    current_chunk = ""
+                    in_code_block = False
+                    for line in raw_lines:
+                        if line.strip().startswith("```"):
+                            in_code_block = not in_code_block
+                        candidate = current_chunk + line + "\n"
+                        if len(candidate) > 3500 and not in_code_block:
+                            chunks.append(current_chunk.strip())
+                            current_chunk = line + "\n"
+                        else:
+                            current_chunk = candidate
+                    if current_chunk.strip():
+                        chunks.append(current_chunk.strip())
+
+                    # Send each chunk safely
+                    for chunk in chunks:
                         try:
                             await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="Markdown")
-                        except:
-                            await context.bot.send_message(chat_id=chat_id, text=chunk)
+                        except Exception:
+                            try:
+                                await context.bot.send_message(chat_id=chat_id, text=chunk)
+                            except Exception:
+                                pass
 
                     if plan == "free":
                         c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))

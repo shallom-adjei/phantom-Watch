@@ -141,7 +141,7 @@ def run_scan(domain, email="", progress_callback=None, tools=None, deep=False, t
             progress_callback("⚡ Nmap (full power)" if deep else "⚡ Nmap scanning...")
         cmd = ["sudo","nmap","-p-","-sV","-O","-T4","--script","vuln,exploit,auth,default,discovery",domain] if deep else \
               ["nmap","-sV","-T4","--top-ports","200",domain]
-        res = run_command(cmd, timeout=600 if deep else 180)
+        res = run_command(cmd, timeout=1000 if deep else 180)
         results['nmap'] = res['stdout']
         set_status("nmap", "failed" if res['failed'] else "done")
         if res['failed']:
