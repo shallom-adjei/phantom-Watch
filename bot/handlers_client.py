@@ -150,10 +150,12 @@ async def set_email_handler(update, context):
 
 async def pricing_handler(update, context):
     query = update.callback_query
-    try:
-        await query.answer()
-    except:
-        pass
+    try: await query.answer()
+    except: pass
+    # Always fetch the latest prices from the database
+    c.execute("SELECT value FROM settings WHERE key='plan_prices'")
+    row = c.fetchone()
+    prices = json.loads(row[0]) if row else {"monthly":"$199","enterprise":"$2,000"}
     pricing_text = (
         "💲 *Phantom Watch Pricing Plans*\n"
         "━━━━━━━━━━━━━━━\n\n"
@@ -337,9 +339,11 @@ async def upgrade_handler(update, context):
     query = update.callback_query
     try: await query.answer()
     except: pass
-    from bot.payments import get_plan_prices, get_crypto_addresses
-    prices = get_plan_prices()
-    addresses = get_crypto_addresses()
+    # Always fetch the latest prices from the database
+    c.execute("SELECT value FROM settings WHERE key='plan_prices'")
+    row = c.fetchone()
+    prices = json.loads(row[0]) if row else {"monthly":"$199","enterprise":"$2,000"}
+    addresses = get_crypto_addresses()   # addresses still from payments module
     addr_lines = "\n".join(f"{coin}: `{addr}`" for coin, addr in addresses.items() if addr)
     msg = (
         "💎 *Upgrade Phantom Watch*\n"
@@ -609,32 +613,20 @@ async def handle_scan_domain(update, context):
                     show_compliance = (scan_type == "full")
                     report_md = build_report_markdown(domain, results, detailed, deep, show_compliance)
 
-                    # Safe chunker – never break inside a code block
-                    raw_lines = report_md.split('\n')
-                    chunks = []
-                    current_chunk = ""
-                    in_code_block = False
-                    for line in raw_lines:
-                        if line.strip().startswith("```"):
-                            in_code_block = not in_code_block
-                        candidate = current_chunk + line + "\n"
-                        if len(candidate) > 3500 and not in_code_block:
-                            chunks.append(current_chunk.strip())
-                            current_chunk = line + "\n"
-                        else:
-                            current_chunk = candidate
-                    if current_chunk.strip():
-                        chunks.append(current_chunk.strip())
+                    # Send brief summary as plain text (no Markdown)
+                    summary_lines = report_md.split("━━━━━━━━━━━━━━━━━━")[0]
+                    await context.bot.send_message(chat_id=chat_id, text=summary_lines.strip())
 
-                    # Send each chunk safely
-                    for chunk in chunks:
-                        try:
-                            await context.bot.send_message(chat_id=chat_id, text=chunk, parse_mode="Markdown")
-                        except Exception:
-                            try:
-                                await context.bot.send_message(chat_id=chat_id, text=chunk)
-                            except Exception:
-                                pass
+                    if detailed:
+                        # Send full report as an attached .md file
+                        import io
+                        file_obj = io.BytesIO(report_md.encode("utf-8"))
+                        file_obj.name = f"PhantomWatch-{domain}-report.md"
+                        await context.bot.send_document(
+                            chat_id=chat_id,
+                            document=file_obj,
+                            caption="📎 Detailed security report (open with any Markdown viewer for full formatting)"
+                        )
 
                     if plan == "free":
                         c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
