@@ -139,14 +139,6 @@ async def quick_scan_subhandler(update, context):
     context.user_data["scan_type"] = "quick"
     await safe_edit(query, "📌 Send the domain name to scan.")
 
-        # Gitleaks requires a GitHub URL, so we'll set a special state
-    context.user_data["state"] = "GITHUB_SCAN"
-    await query.edit_message_text("🔑 Send the GitHub repository URL (e.g., https://github.com/user/repo):")
-    context.user_data["state"] = "SCAN_DOMAIN"
-    context.user_data["tools"] = tools
-    context.user_data["scan_type"] = "quick"
-    await safe_edit(query, "📌 Send the domain name to scan.")
-
 async def set_email_handler(update, context):
     query = update.callback_query
     try:
