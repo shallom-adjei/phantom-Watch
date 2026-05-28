@@ -197,25 +197,33 @@ async def handle_admin_wizard(update, context):
     if state == "UPDATE_PRICES":
         if username != ADMIN_USERNAME:
             await update.message.reply_text("❌ Admin only.")
+            context.user_data.pop("state", None)
             return True
         try:
             parts = dict(pair.split("=") for pair in text.split(","))
             from bot.payments import set_plan_prices
             set_plan_prices(parts)
             await update.message.reply_text("✅ Prices updated.", reply_markup=admin_menu())
-        except Exception:
-            await update.message.reply_text("❌ Could not update prices. Please try again later.", reply_markup=admin_menu())
+        except Exception as e:
+            await update.message.reply_text(f"❌ Could not update prices. Please try again later.\nError: {e}")
+        finally:
+            context.user_data.pop("state", None)
+        return True
 
     if state == "UPDATE_ADDRESSES":
         if username != ADMIN_USERNAME:
             await update.message.reply_text("❌ Admin only.")
+            context.user_data.pop("state", None)
             return True
         try:
             parts = dict(pair.split("=") for pair in text.split(","))
             from bot.payments import set_crypto_addresses
             set_crypto_addresses(parts)
             await update.message.reply_text("✅ Crypto addresses updated.", reply_markup=admin_menu())
-        except Exception:
-            await update.message.reply_text("❌ Could not update addresses. Please try again later.", reply_markup=admin_menu())
+        except Exception as e:
+            await update.message.reply_text(f"❌ Could not update addresses. Please try again later.\nError: {e}")
+        finally:
+            context.user_data.pop("state", None)
+        return True
 
     return False
