@@ -335,10 +335,11 @@ async def main_menu_handler(update, context):
         pass
     username = query.from_user.username
     await safe_edit(query, "⬇️ Main Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
-async def upgrade_handler(update, context):
-    query = update.callback_query
-    try: await query.answer()
-    except: pass
+
+    c.execute("SELECT value FROM settings WHERE key='plan_prices'")
+    row = c.fetchone()
+    prices = json.loads(row[0]) if row else {"monthly":"$199","enterprise":"$2,000"}
+
     # Always fetch the latest prices from the database
     c.execute("SELECT value FROM settings WHERE key='plan_prices'")
     row = c.fetchone()

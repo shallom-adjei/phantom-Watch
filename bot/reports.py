@@ -133,10 +133,10 @@ def compute_threat_score(results):
 def clean_ansi(text):
     return re.sub(r"\x1b\[[0-9;]*m", "", text)
 
-def safe_code_block(content, max_len=800):
+def safe_code_block(content, max_len=None):
     """Return a Markdown code block with sanitised content."""
     safe = content.replace("```", "'''")
-    if len(safe) > max_len:
+    if max_len and len(safe) > max_len:
         safe = safe[:max_len]
     return "```\n" + safe + "\n```"
 
@@ -252,44 +252,42 @@ def build_report_markdown(domain, results, detailed=False, deep=False, show_comp
             if key in results and "Error" not in str(results.get(key, "")):
                 raw = results[key]
 
-                # --- Tool‑specific handling ---
+                # Tool‑specific handling (full output, no slicing)
                 if key == "reconspider" and isinstance(raw, str):
                     if raw.strip().startswith("__________"):
                         snippet = "No findings."
-                    elif raw.strip():
-                        snippet = clean_ansi(raw)[:300]
                     else:
-                        snippet = "No findings."
+                        snippet = clean_ansi(raw) if raw.strip() else "No findings."
                 elif key == "dnstwist":
                     lines_raw = raw.strip().split('\n')
                     registered = [l for l in lines_raw if "registered" in l]
-                    snippet = "\n".join(registered[:15]) if registered else "No typosquatting domains registered."
+                    snippet = "\n".join(registered) if registered else "No typosquatting domains registered."
                 elif key == "subfinder":
                     lines_raw = raw.strip().split('\n')
                     real_subs = [l for l in lines_raw if l and not l.startswith('[') and l != domain]
-                    snippet = "\n".join(real_subs[:15]) if real_subs else "No live subdomains found."
+                    snippet = "\n".join(real_subs) if real_subs else "No live subdomains found."
                 elif key == "spiderfoot":
                     if isinstance(raw, dict) and "error" in raw:
                         snippet = raw["error"]
                     elif isinstance(raw, list):
-                        snippet = json.dumps(raw, indent=2)[:500] if raw else "No findings."
+                        snippet = json.dumps(raw, indent=2) if raw else "No findings."
                     else:
-                        snippet = clean_ansi(str(raw))[:300] if raw else "No findings."
+                        snippet = clean_ansi(str(raw)) if raw else "No findings."
                 elif key == "prowler":
                     if isinstance(raw, dict) and raw.get("status") == "skipped":
                         snippet = raw.get("message", "Cloud audit skipped.")
                     else:
-                        snippet = json.dumps(raw, indent=2)[:500]
+                        snippet = json.dumps(raw, indent=2) if isinstance(raw, (dict, list)) else clean_ansi(str(raw))
                 elif isinstance(raw, (dict, list)):
-                    snippet = json.dumps(raw, indent=2)[:500]
+                    snippet = json.dumps(raw, indent=2)
                 else:
-                    # Paid clients (monthly/enterprise) get more detail
-                    max_detail = 1200 if detailed else 300
-                    snippet = clean_ansi(str(raw))[:max_detail] if raw else "No findings."
+                    snippet = clean_ansi(str(raw)) if raw else "No findings."
 
-                safe = snippet.replace("```", "'''")
+                # Wrap in code block (no max length limit)
                 lines.append(label)
-                lines.append(safe_code_block(safe, max_len=1200 if detailed else 800))
+                lines.append("```")
+                lines.append(snippet.replace("```", "'''"))
+                lines.append("```")
 
         # Nuclei explicit block (always show if run)
         if 'nuclei' in results:
