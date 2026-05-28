@@ -327,7 +327,6 @@ async def contact_admin_handler(update, context):
     msg = f"📩 Contact the admin directly: @{ADMIN_USERNAME}\n\n👉 https://t.me/{ADMIN_USERNAME}"
     await safe_edit(query, msg)
 
-async def main_menu_handler(update, context):
 async def upgrade_handler(update, context):
     query = update.callback_query
     try: await query.answer()
@@ -350,7 +349,6 @@ async def upgrade_handler(update, context):
     )
     await context.bot.send_message(chat_id=query.message.chat_id, text=msg, parse_mode="Markdown")
     await safe_edit(query, "🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
-    query = update.callback_query
     try:
         await query.answer()
     except:
