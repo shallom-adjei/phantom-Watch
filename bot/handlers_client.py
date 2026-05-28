@@ -327,6 +327,15 @@ async def contact_admin_handler(update, context):
     msg = f"📩 Contact the admin directly: @{ADMIN_USERNAME}\n\n👉 https://t.me/{ADMIN_USERNAME}"
     await safe_edit(query, msg)
 
+async def main_menu_handler(update, context):
+    query = update.callback_query
+    try:
+        await query.answer()
+    except:
+        pass
+    username = query.from_user.username
+    await safe_edit(query, "⬇️ Main Menu:", reply_markup=main_menu(username == ADMIN_USERNAME))
+
 async def upgrade_handler(update, context):
     query = update.callback_query
     try: await query.answer()
