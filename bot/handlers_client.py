@@ -328,6 +328,28 @@ async def contact_admin_handler(update, context):
     await safe_edit(query, msg)
 
 async def main_menu_handler(update, context):
+async def upgrade_handler(update, context):
+    query = update.callback_query
+    try: await query.answer()
+    except: pass
+    c.execute("SELECT value FROM settings WHERE key='plan_prices'")
+    row = c.fetchone()
+    prices = json.loads(row[0]) if row else {"monthly":"$199","enterprise":"$2,000"}
+    from bot.payments import get_crypto_addresses
+    addresses = get_crypto_addresses()
+    addr_lines = "\n".join(f"{coin}: `{addr}`" for coin, addr in addresses.items() if addr)
+    msg = (
+        "💎 *Upgrade Phantom Watch*\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        f"🛡️ Monthly: {prices.get('monthly','$199')}\n"
+        f"👑 Enterprise: {prices.get('enterprise','$2,000')}\n\n"
+        "📩 *Send payment to one of the addresses below*\n"
+        f"{addr_lines}\n\n"
+        "After payment, send a screenshot to the admin. Your plan will be activated within minutes.\n"
+        f"Contact: @{ADMIN_USERNAME}"
+    )
+    await context.bot.send_message(chat_id=query.message.chat_id, text=msg, parse_mode="Markdown")
+    await safe_edit(query, "🔮 Return to main menu:", reply_markup=main_menu(query.from_user.username == ADMIN_USERNAME))
     query = update.callback_query
     try:
         await query.answer()
