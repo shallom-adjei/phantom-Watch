@@ -150,12 +150,16 @@ async def set_email_handler(update, context):
 
 async def pricing_handler(update, context):
     query = update.callback_query
-    try: await query.answer()
-    except: pass
-    # Always fetch the latest prices from the database
+    try:
+        await query.answer()
+    except:
+        pass
+
+    # Fetch latest prices from the database
     c.execute("SELECT value FROM settings WHERE key='plan_prices'")
     row = c.fetchone()
     prices = json.loads(row[0]) if row else {"monthly":"$199","enterprise":"$2,000"}
+
     pricing_text = (
         "💲 *Phantom Watch Pricing Plans*\n"
         "━━━━━━━━━━━━━━━\n\n"
@@ -166,7 +170,7 @@ async def pricing_handler(update, context):
         "   ✔ Exposure & vulnerability overview\n"
         "   ✔ Limited reporting features\n\n"
         "   💵 *Price:* Free\n\n"
-        "🛡️ *Monthly Plan — $199/month*\n"
+        f"🛡️ *Monthly Plan — {prices.get('monthly','$199')}*\n"
         "   Designed for growing businesses\n\n"
         "   ✔ Unlimited full scans\n"
         "   ✔ Professional reports\n"
@@ -175,8 +179,8 @@ async def pricing_handler(update, context):
         "   ✔ Weekly automated scans\n"
         "   ✔ Continuous exposure tracking\n"
         "   ✔ Priority vulnerability alerts\n\n"
-        "   💵 *Price:* $199/month\n\n"
-        "👑 *Enterprise Plan — $2,000/month*\n"
+        f"   💵 *Price:* {prices.get('monthly','$199')}\n\n"
+        f"👑 *Enterprise Plan — {prices.get('enterprise','$2,000')}*\n"
         "   Advanced protection for organizations\n\n"
         "   ✔ Everything in Monthly Plan\n"
         "   ✔ Exploitation proof screenshots\n"
@@ -186,7 +190,7 @@ async def pricing_handler(update, context):
         "   ✔ Priority support & escalation\n"
         "   ✔ Dedicated monitoring workflows\n"
         "   ✔ Enhanced reporting & analytics\n\n"
-        "   💵 *Price:* $2,000/month\n\n"
+        f"   💵 *Price:* {prices.get('enterprise','$2,000')}\n\n"
         "━━━━━━━━━━━━━━━\n"
         "📩 *Need Access or an Upgrade?*\n"
         "Contact the admin to activate your plan."
@@ -223,7 +227,7 @@ async def how_it_works_handler(update, context):
         "   └ High-risk exposures are prioritized\n"
         "   └ Continuous tracking for new threats\n\n"
         "5️ *Professional Reporting*\n"
-        "   └ Detailed PDF security reports\n"
+        "   └ Detailed security reports\n"
         "   └ Compliance mapping included\n"
         "   └ Clear remediation recommendations\n"
         "   └ Executive-friendly summaries\n\n"
@@ -340,19 +344,31 @@ async def upgrade_handler(update, context):
     query = update.callback_query
     try: await query.answer()
     except: pass
+
+    # Always fetch the latest prices and addresses
     c.execute("SELECT value FROM settings WHERE key='plan_prices'")
     row = c.fetchone()
     prices = json.loads(row[0]) if row else {"monthly":"$199","enterprise":"$2,000"}
+
     from bot.payments import get_crypto_addresses
     addresses = get_crypto_addresses()
-    addr_lines = "\n".join(f"{coin}: `{addr}`" for coin, addr in addresses.items() if addr)
+
+    # Build a copyable code block for each address
+    addr_blocks = []
+    for coin, addr in addresses.items():
+        if addr:
+            addr_blocks.append(f"{coin}:\n```\n{addr}\n```")
+    addr_section = "\n".join(addr_blocks) if addr_blocks else "No addresses configured yet."
+
     msg = (
         "💎 *Upgrade Phantom Watch*\n"
         "━━━━━━━━━━━━━━━━━━\n\n"
         f"🛡️ Monthly: {prices.get('monthly','$199')}\n"
         f"👑 Enterprise: {prices.get('enterprise','$2,000')}\n\n"
-        "📩 *Send payment to one of the addresses below*\n"
-        f"{addr_lines}\n\n"
+        "📩 *Send payment to one of the addresses below*\n\n"
+        f"{addr_section}\n\n"
+        "✏️ *ETH Network : Ethereum (ERC20).*\n\n"
+        "✏️ *USDT Network : Tron (TRC20).*\n\n"
         "After payment, send a screenshot to the admin. Your plan will be activated within minutes.\n"
         f"Contact: @{ADMIN_USERNAME}"
     )
@@ -529,6 +545,10 @@ async def handle_scan_domain(update, context):
     if not is_active(username):
         await update.message.reply_text("⛔ Not authorized or trial expired.")
         return True
+    # Block free users who already used their scan
+    if not is_active(username):
+        await update.message.reply_text("⛔ Free trial already used. Upgrade to continue scanning.")
+        return True
 
     # Verification
     if username != ADMIN_USERNAME:
@@ -658,7 +678,11 @@ async def handle_scan_domain(update, context):
                             caption="📎 Detailed security report (open with any Markdown viewer for full formatting)"
                         )
 
-                    if plan == "free":
+                    # Re‑fetch the plan from the database to avoid stale context
+                    c.execute("SELECT plan FROM clients WHERE username=?", (username,))
+                    current_plan = c.fetchone()
+                    current_plan = current_plan[0] if current_plan else "free"
+                    if current_plan == "free":
                         c.execute("UPDATE clients SET scan_used=1 WHERE username=?", (username,))
                         conn.commit()
 
